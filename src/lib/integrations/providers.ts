@@ -1,17 +1,18 @@
 /**
  * Central provider registry for the APIs & Integrations Control Center.
- * Every provider the UI/API knows about is defined exactly once here —
+ * Every provider the UI/API knows about is defined exactly once here -
  * nothing downstream should hardcode a provider id/name/field list.
  *
- * Adding a future provider (Instagram, Google, TikTok, ...) should mostly
- * mean adding an entry here plus a small adapter, not touching the UI or
- * the credential-storage plumbing.
+ * Adding a future provider should mostly mean adding an entry here plus a
+ * small adapter (see src/lib/integrations/adapter.ts), not touching the UI
+ * or the credential-storage plumbing.
  */
 
 export type ProviderId =
   | "gemini"
   | "whatsapp"
-  | "meta"
+  | "facebook"
+  | "instagram"
   | "tiktok"
   | "linkedin"
   | "x"
@@ -20,23 +21,68 @@ export type ProviderId =
   | "google-sheets"
   | "google-calendar"
 
-export type ProviderCategory = "ai" | "messaging" | "social" | "calling" | "google"
+export type ProviderCategory = "ai" | "messaging" | "social" | "calling" | "productivity"
 
 export type IntegrationMode = "disabled" | "demo" | "live"
 
-/** `not_configured`/`configured` describe credential presence; the rest
- * describe the last known connection outcome. Never inferred as "connected"
- * from mode alone — only a successful test (or live send/receive) sets it. */
-export type IntegrationStatus = "not_configured" | "configured" | "connected" | "error" | "expired" | "disabled"
+/** `not_configured`/`configured` describe credential presence; `connecting`
+ * covers an in-flight OAuth handshake; the rest describe the last known
+ * connection outcome. Never inferred as "connected" from mode alone - only
+ * a successful test (or live send/receive) sets it. */
+export type IntegrationStatus =
+  | "not_configured"
+  | "configured"
+  | "connecting"
+  | "connected"
+  | "error"
+  | "expired"
+  | "disabled"
+
+/** What a provider actually lets the platform do - dashboard modules can
+ * query these instead of hardcoding provider names. */
+export type ProviderCapability =
+  | "oauth"
+  | "api_key"
+  | "webhook"
+  | "publishing"
+  | "messages"
+  | "comments"
+  | "analytics"
+  | "calendar"
+  | "spreadsheets"
+  | "calling"
+  | "ai"
+  | "token_refresh"
+
+export type CredentialFieldType = "text" | "password" | "url" | "number" | "select" | "boolean"
 
 export interface CredentialField {
   key: string
   label: string
-  helpText?: string
+  description?: string
+  type: CredentialFieldType
   /** Secret fields are encrypted at rest and never echoed back to the client. */
   secret: boolean
   required: boolean
   placeholder?: string
+  /** Where to obtain this value - official docs, never a credential itself. */
+  helpUrl?: string
+  /** Groups related fields under one heading in the credential form. */
+  group?: string
+  /** Regex the value must match, checked server-side before saving. */
+  validationPattern?: string
+  /** For type "select". */
+  options?: { value: string; label: string }[]
+}
+
+export interface OAuthConfig {
+  authorizationUrl: string
+  tokenUrl: string
+  scopes: string[]
+  usesPkce?: boolean
+  /** True if the app's own Client ID/Secret are entered per-workspace
+   * (agency reselling under their own app) rather than shared platform-wide. */
+  perWorkspaceAppCredentials: boolean
 }
 
 export interface ProviderDefinition {
@@ -44,17 +90,38 @@ export interface ProviderDefinition {
   name: string
   category: ProviderCategory
   description: string
-  /** Short, human list of what this integration actually does once connected. */
-  capabilities: string[]
+  capabilities: ProviderCapability[]
   credentialFields: CredentialField[]
   supportedModes: IntegrationMode[]
   requiresOAuth: boolean
+  oauth?: OAuthConfig
   requiresWebhook: boolean
   webhookPath?: string
   /** Whether a server environment variable can supply this provider's
    * credentials as a fallback when no workspace-level record exists. */
   envFallback?: { envVar: string; describes: string }
+  /** Official setup documentation - shown in the UI, never a credential. */
+  setupDocsUrl?: string
 }
+
+const META_GRAPH_VERSION = "v21.0"
+const META_OAUTH: OAuthConfig = {
+  authorizationUrl: `https://www.facebook.com/${META_GRAPH_VERSION}/dialog/oauth`,
+  tokenUrl: `https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token`,
+  scopes: ["pages_show_list", "pages_manage_posts", "pages_read_engagement"],
+  perWorkspaceAppCredentials: true,
+}
+
+const GOOGLE_OAUTH_BASE: Omit<OAuthConfig, "scopes"> = {
+  authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+  tokenUrl: "https://oauth2.googleapis.com/token",
+  perWorkspaceAppCredentials: true,
+}
+
+const OAUTH_APP_FIELDS: CredentialField[] = [
+  { key: "clientId", label: "Client ID", type: "text", secret: false, required: true, group: "App credentials" },
+  { key: "clientSecret", label: "Client secret", type: "password", secret: true, required: true, group: "App credentials" },
+]
 
 export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
   gemini: {
@@ -62,108 +129,140 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     name: "Gemini",
     category: "ai",
     description: "Powers AI Assistant captions/replies and the WhatsApp sales-qualification chatbot.",
-    capabilities: ["Content generation", "WhatsApp lead qualification"],
-    credentialFields: [{ key: "apiKey", label: "API key", secret: true, required: true }],
+    capabilities: ["api_key", "ai"],
+    credentialFields: [
+      {
+        key: "apiKey",
+        label: "API key",
+        type: "password",
+        secret: true,
+        required: true,
+        helpUrl: "https://ai.google.dev/gemini-api/docs/api-key",
+      },
+    ],
     supportedModes: ["demo", "live"],
     requiresOAuth: false,
     requiresWebhook: false,
     envFallback: { envVar: "GEMINI_API_KEY", describes: "server-configured Gemini API key" },
+    setupDocsUrl: "https://ai.google.dev/gemini-api/docs/api-key",
   },
   whatsapp: {
     id: "whatsapp",
     name: "WhatsApp Cloud API",
     category: "messaging",
     description: "Official Meta WhatsApp Business Cloud API for real customer conversations.",
-    capabilities: ["Send/receive messages", "AI sales qualification", "CRM lead sync"],
+    capabilities: ["api_key", "webhook", "messages"],
     credentialFields: [
-      { key: "wabaId", label: "WhatsApp Business Account ID", secret: false, required: true },
-      { key: "phoneNumberId", label: "Phone Number ID", secret: false, required: true },
-      { key: "accessToken", label: "Access token", secret: true, required: true },
-      { key: "verifyToken", label: "Webhook verify token", secret: true, required: true },
-      { key: "appSecret", label: "Meta App secret", helpText: "Used to verify inbound webhook signatures.", secret: true, required: true },
+      { key: "wabaId", label: "WhatsApp Business Account ID", type: "text", secret: false, required: true },
+      { key: "phoneNumberId", label: "Phone Number ID", type: "text", secret: false, required: true },
+      { key: "accessToken", label: "Access token", type: "password", secret: true, required: true },
+      { key: "verifyToken", label: "Webhook verify token", type: "password", secret: true, required: true, description: "Any string you choose - entered identically in Meta's webhook configuration." },
+      { key: "appSecret", label: "Meta App secret", type: "password", secret: true, required: true, description: "Used to verify inbound webhook signatures." },
     ],
     supportedModes: ["demo", "live"],
     requiresOAuth: false,
     requiresWebhook: true,
     webhookPath: "/api/webhooks/whatsapp",
+    setupDocsUrl: "https://developers.facebook.com/docs/whatsapp/cloud-api/get-started",
   },
-  meta: {
-    id: "meta",
-    name: "Meta / Facebook / Instagram",
+  facebook: {
+    id: "facebook",
+    name: "Facebook Page",
     category: "social",
-    description: "Facebook Page and Instagram publishing/inbox — not yet implemented.",
-    capabilities: ["Publishing (future)", "Unified inbox (future)"],
-    credentialFields: [
-      { key: "appId", label: "Meta App ID", secret: false, required: true },
-      { key: "appSecret", label: "Meta App secret", secret: true, required: true },
-    ],
-    supportedModes: ["demo"],
+    description: "Facebook Page publishing and comment moderation - not yet implemented beyond the connection itself.",
+    capabilities: ["oauth", "publishing", "comments", "analytics"],
+    credentialFields: OAUTH_APP_FIELDS,
+    supportedModes: ["demo", "live"],
     requiresOAuth: true,
+    oauth: { ...META_OAUTH, scopes: ["pages_show_list", "pages_manage_posts", "pages_read_engagement"] },
+    requiresWebhook: false,
+  },
+  instagram: {
+    id: "instagram",
+    name: "Instagram Business",
+    category: "social",
+    description: "Instagram publishing and comment moderation - not yet implemented beyond the connection itself.",
+    capabilities: ["oauth", "publishing", "comments", "analytics"],
+    credentialFields: OAUTH_APP_FIELDS,
+    supportedModes: ["demo", "live"],
+    requiresOAuth: true,
+    oauth: { ...META_OAUTH, scopes: ["instagram_basic", "instagram_content_publish", "pages_show_list"] },
     requiresWebhook: false,
   },
   tiktok: {
     id: "tiktok",
     name: "TikTok",
     category: "social",
-    description: "TikTok publishing — not yet implemented.",
-    capabilities: ["Publishing (future)"],
-    credentialFields: [
-      { key: "clientKey", label: "Client key", secret: false, required: true },
-      { key: "clientSecret", label: "Client secret", secret: true, required: true },
-    ],
-    supportedModes: ["demo"],
+    description: "TikTok publishing - not yet implemented beyond the connection itself.",
+    capabilities: ["oauth", "publishing"],
+    credentialFields: OAUTH_APP_FIELDS,
+    supportedModes: ["demo", "live"],
     requiresOAuth: true,
+    oauth: {
+      authorizationUrl: "https://www.tiktok.com/v2/auth/authorize/",
+      tokenUrl: "https://open.tiktokapis.com/v2/oauth/token/",
+      scopes: ["video.publish", "user.info.basic"],
+      perWorkspaceAppCredentials: true,
+    },
     requiresWebhook: false,
   },
   linkedin: {
     id: "linkedin",
     name: "LinkedIn",
     category: "social",
-    description: "LinkedIn publishing — not yet implemented.",
-    capabilities: ["Publishing (future)"],
-    credentialFields: [
-      { key: "clientId", label: "Client ID", secret: false, required: true },
-      { key: "clientSecret", label: "Client secret", secret: true, required: true },
-    ],
-    supportedModes: ["demo"],
+    description: "LinkedIn publishing - not yet implemented beyond the connection itself.",
+    capabilities: ["oauth", "publishing"],
+    credentialFields: OAUTH_APP_FIELDS,
+    supportedModes: ["demo", "live"],
     requiresOAuth: true,
+    oauth: {
+      authorizationUrl: "https://www.linkedin.com/oauth/v2/authorization",
+      tokenUrl: "https://www.linkedin.com/oauth/v2/accessToken",
+      scopes: ["w_member_social", "r_organization_social"],
+      perWorkspaceAppCredentials: true,
+    },
     requiresWebhook: false,
   },
   x: {
     id: "x",
     name: "X (Twitter)",
     category: "social",
-    description: "X publishing — not yet implemented.",
-    capabilities: ["Publishing (future)"],
-    credentialFields: [
-      { key: "apiKey", label: "API key", secret: true, required: true },
-      { key: "apiSecret", label: "API secret", secret: true, required: true },
-    ],
-    supportedModes: ["demo"],
+    description: "X publishing - not yet implemented beyond the connection itself.",
+    capabilities: ["oauth", "publishing"],
+    credentialFields: OAUTH_APP_FIELDS,
+    supportedModes: ["demo", "live"],
     requiresOAuth: true,
+    oauth: {
+      authorizationUrl: "https://twitter.com/i/oauth2/authorize",
+      tokenUrl: "https://api.twitter.com/2/oauth2/token",
+      scopes: ["tweet.read", "tweet.write", "users.read"],
+      usesPkce: true,
+      perWorkspaceAppCredentials: true,
+    },
     requiresWebhook: false,
   },
   youtube: {
     id: "youtube",
     name: "YouTube",
     category: "social",
-    description: "YouTube publishing — not yet implemented.",
-    capabilities: ["Publishing (future)"],
-    credentialFields: [{ key: "apiKey", label: "API key", secret: true, required: true }],
-    supportedModes: ["demo"],
+    description: "YouTube publishing via Google OAuth - not yet implemented beyond the connection itself.",
+    capabilities: ["oauth", "publishing", "analytics"],
+    credentialFields: OAUTH_APP_FIELDS,
+    supportedModes: ["demo", "live"],
     requiresOAuth: true,
+    oauth: { ...GOOGLE_OAUTH_BASE, scopes: ["https://www.googleapis.com/auth/youtube.upload"] },
     requiresWebhook: false,
   },
   omnidimension: {
     id: "omnidimension",
     name: "OmniDimension",
     category: "calling",
-    description: "AI calling agent. Agent is configured; no production phone number yet — calling stays in demo mode until Phase 4.",
-    capabilities: ["Outbound AI calls (Phase 4)"],
+    description: "AI calling agent. Calling dispatch is intentionally disabled until a later phase.",
+    capabilities: ["api_key", "webhook", "calling"],
     credentialFields: [
-      { key: "apiKey", label: "API key", secret: true, required: true },
-      { key: "agentId", label: "Agent ID", secret: false, required: true },
-      { key: "fromNumberId", label: "From-number ID", secret: false, required: false },
+      { key: "apiKey", label: "API key", type: "password", secret: true, required: true },
+      { key: "agentId", label: "Agent ID", type: "text", secret: false, required: true },
+      { key: "fromNumberId", label: "From-number ID", type: "text", secret: false, required: false },
     ],
     supportedModes: ["demo"],
     requiresOAuth: false,
@@ -173,29 +272,25 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
   "google-sheets": {
     id: "google-sheets",
     name: "Google Sheets",
-    category: "google",
-    description: "Lead export/sync to Google Sheets — not yet implemented.",
-    capabilities: ["Lead export (future)"],
-    credentialFields: [
-      { key: "clientId", label: "OAuth client ID", secret: false, required: true },
-      { key: "clientSecret", label: "OAuth client secret", secret: true, required: true },
-    ],
-    supportedModes: ["demo"],
+    category: "productivity",
+    description: "Secondary lead export/sync to Google Sheets - PostgreSQL remains the source of truth.",
+    capabilities: ["oauth", "spreadsheets"],
+    credentialFields: OAUTH_APP_FIELDS,
+    supportedModes: ["demo", "live"],
     requiresOAuth: true,
+    oauth: { ...GOOGLE_OAUTH_BASE, scopes: ["https://www.googleapis.com/auth/spreadsheets"] },
     requiresWebhook: false,
   },
   "google-calendar": {
     id: "google-calendar",
     name: "Google Calendar",
-    category: "google",
-    description: "Meeting scheduling sync — not yet implemented.",
-    capabilities: ["Meeting sync (future)"],
-    credentialFields: [
-      { key: "clientId", label: "OAuth client ID", secret: false, required: true },
-      { key: "clientSecret", label: "OAuth client secret", secret: true, required: true },
-    ],
-    supportedModes: ["demo"],
+    category: "productivity",
+    description: "Meeting scheduling sync - not yet implemented beyond the connection itself.",
+    capabilities: ["oauth", "calendar"],
+    credentialFields: OAUTH_APP_FIELDS,
+    supportedModes: ["demo", "live"],
     requiresOAuth: true,
+    oauth: { ...GOOGLE_OAUTH_BASE, scopes: ["https://www.googleapis.com/auth/calendar.events"] },
     requiresWebhook: false,
   },
 }
@@ -206,10 +301,14 @@ export function isProviderId(value: string): value is ProviderId {
   return value in PROVIDER_REGISTRY
 }
 
+export function providersWithCapability(capability: ProviderCapability): ProviderId[] {
+  return PROVIDER_IDS.filter((id) => PROVIDER_REGISTRY[id].capabilities.includes(capability))
+}
+
 export const CATEGORY_LABELS: Record<ProviderCategory, string> = {
   ai: "AI",
   messaging: "Messaging",
   social: "Social",
   calling: "Calling",
-  google: "Google",
+  productivity: "Productivity",
 }

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { decryptSecret } from "@/lib/integrations/crypto"
 import { findWhatsAppContextByWaba, findWhatsAppContextByVerifyToken } from "@/lib/integrations/whatsapp/repository"
 import { processInboundMessage } from "@/lib/integrations/whatsapp/pipeline"
+import { recordWebhookEvent, markWebhookEventProcessed, markWebhookEventFailed } from "@/lib/integrations/webhook-events"
 
 /**
  * Official Meta WhatsApp Cloud API webhook. Two responsibilities:
@@ -113,6 +114,16 @@ export async function POST(request: Request) {
 
       for (const message of value.messages) {
         const contactName = value.contacts?.find((c) => c.wa_id === message.from)?.profile?.name ?? null
+
+        const event = await recordWebhookEvent({
+          provider: "whatsapp",
+          workspaceId: context.workspaceId,
+          externalEventId: message.id,
+          eventType: message.type,
+          payloadSummary: { from: message.from, type: message.type },
+        })
+        if (!event) continue // already recorded - the message pipeline's own dedupe would also catch this, this is belt-and-braces
+
         try {
           await processInboundMessage({
             workspaceId: context.workspaceId,
@@ -128,10 +139,12 @@ export async function POST(request: Request) {
             body: message.type === "text" ? (message.text?.body ?? null) : null,
             rawMetadata: message as unknown as Record<string, unknown>,
           })
+          await markWebhookEventProcessed(event.id)
         } catch (error) {
           // Never let one bad message fail the whole webhook delivery (Meta
-          // retries on non-2xx) — log server-side and continue.
+          // retries on non-2xx) - log server-side and continue.
           console.error("WhatsApp inbound message processing failed:", error instanceof Error ? error.message : error)
+          await markWebhookEventFailed(event.id, "processing_error")
         }
       }
     }

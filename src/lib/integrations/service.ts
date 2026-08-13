@@ -1,5 +1,5 @@
 import { PROVIDER_REGISTRY, type ProviderId, type IntegrationMode, type IntegrationStatus } from "./providers"
-import { encryptSecret, decryptSecret, maskSecret } from "./crypto"
+import { encryptSecret, maskSecret } from "./crypto"
 import {
   getConnection,
   listConnections,
@@ -7,8 +7,11 @@ import {
   deleteConnection,
   recordTestResult,
   recordAuditEvent,
-  type IntegrationConnectionRow,
 } from "./repository"
+import { resolveCredentialValue } from "./credential-resolution"
+import { evaluateProviderReadiness, computeReadiness, type ProviderReadiness } from "./readiness"
+
+export { resolveCredentialValue }
 
 /** Safe, client-facing view of a provider's connection state — never a raw
  * secret, only presence + a masked tail where that's safe to show. */
@@ -35,34 +38,7 @@ export interface ProviderConnectionView {
   lastSuccessAt: string | null
   lastErrorMessage: string | null
   updatedAt: string | null
-}
-
-/** Resolves a single credential field's plaintext value following the
- * documented precedence: workspace-specific encrypted DB value first, then
- * a server environment default, then unavailable. Never logs the value. */
-export function resolveCredentialValue(
-  row: IntegrationConnectionRow | null,
-  fieldKey: string,
-  provider: ProviderId
-): { value: string | null; source: "workspace" | "environment" | "none" } {
-  const encryptedBlob = row?.secretDataEncrypted?.[fieldKey]
-  if (encryptedBlob) {
-    const decrypted = decryptSecret(encryptedBlob)
-    if (decrypted) return { value: decrypted, source: "workspace" }
-  }
-
-  const nonSecretValue = row?.config?.[fieldKey]
-  if (typeof nonSecretValue === "string" && nonSecretValue) {
-    return { value: nonSecretValue, source: "workspace" }
-  }
-
-  const envFallback = PROVIDER_REGISTRY[provider].envFallback
-  if (envFallback && fieldKey === "apiKey") {
-    const envValue = process.env[envFallback.envVar]
-    if (envValue) return { value: envValue, source: "environment" }
-  }
-
-  return { value: null, source: "none" }
+  readiness: ProviderReadiness
 }
 
 export async function getProviderView(workspaceId: string, provider: ProviderId): Promise<ProviderConnectionView> {
@@ -83,6 +59,7 @@ export async function getProviderView(workspaceId: string, provider: ProviderId)
   })
 
   const usingEnvFallback = credentialFields.some((f) => f.source === "environment")
+  const readiness = await evaluateProviderReadiness(workspaceId, provider)
 
   return {
     provider,
@@ -99,6 +76,7 @@ export async function getProviderView(workspaceId: string, provider: ProviderId)
     lastSuccessAt: row?.lastSuccessAt?.toISOString() ?? null,
     lastErrorMessage: row?.lastErrorMessage ?? null,
     updatedAt: row?.updatedAt?.toISOString() ?? null,
+    readiness,
   }
 }
 
@@ -138,6 +116,7 @@ export async function listProviderViews(workspaceId: string): Promise<ProviderCo
       lastSuccessAt: row?.lastSuccessAt?.toISOString() ?? null,
       lastErrorMessage: row?.lastErrorMessage ?? null,
       updatedAt: row?.updatedAt?.toISOString() ?? null,
+      readiness: computeReadiness(row, provider),
     }
   })
 }
@@ -189,6 +168,52 @@ export async function saveConnection(input: SaveConnectionInput): Promise<Provid
     input.actorUserId,
     { fieldsUpdated: Object.keys(input.fields).filter((k) => input.fields[k]) }
   )
+
+  return getProviderView(input.workspaceId, input.provider)
+}
+
+export interface StoreOAuthTokensInput {
+  workspaceId: string
+  provider: ProviderId
+  actorUserId: string | null
+  accessToken: string
+  refreshToken?: string
+  expiresInSeconds?: number
+}
+
+/** Stores tokens obtained from a completed OAuth exchange. Deliberately
+ * separate from saveConnection: tokens are server-obtained, not user-typed
+ * form fields, so they bypass the credentialFields whitelist and are keyed
+ * under their own encrypted slots. A successful token exchange is genuine
+ * evidence of a real connection, so this is the one path allowed to set
+ * status "connected" directly rather than the generic post-save
+ * "configured" state. */
+export async function storeOAuthTokens(input: StoreOAuthTokensInput): Promise<ProviderConnectionView> {
+  const secretDataEncrypted: Record<string, string> = {
+    accessToken: encryptSecret(input.accessToken).blob,
+  }
+  if (input.refreshToken) {
+    secretDataEncrypted.refreshToken = encryptSecret(input.refreshToken).blob
+  }
+
+  const config: Record<string, unknown> = {}
+  if (input.expiresInSeconds) {
+    config.tokenExpiresAt = new Date(Date.now() + input.expiresInSeconds * 1000).toISOString()
+  }
+
+  await upsertConnection({
+    workspaceId: input.workspaceId,
+    provider: input.provider,
+    mode: "live",
+    status: "connected",
+    config,
+    secretDataEncrypted,
+  })
+
+  await recordTestResult(input.workspaceId, input.provider, { ok: true, status: "connected" })
+  await recordAuditEvent(input.workspaceId, input.provider, "connection_test_succeeded", input.actorUserId, {
+    step: "oauth_token_exchange",
+  })
 
   return getProviderView(input.workspaceId, input.provider)
 }
