@@ -51,20 +51,23 @@ app
     const server = createServer((req, res) => {
       // Cache-maintenance escape hatch: this host's cPanel account has no
       // self-service LiteSpeed cache-manager UI and no SSH access, so this
-      // is the only way to evict a stale LiteSpeed-cached response for
-      // /dashboard (e.g. one recorded from a build predating a proxy/auth
-      // fix). It purges exactly one hardcoded URL via LiteSpeed's documented
-      // response-header purge API - it never accepts a caller-supplied path,
-      // so it cannot be used to purge anything else, on this domain or any
-      // other. Gated by its own dedicated CACHE_PURGE_TOKEN (never reused
-      // from SETUP_TOKEN/AUTH_SECRET) supplied only via a request header,
-      // never a URL query string. A missing/wrong token gets a plain 404,
-      // not a 403, so the route's existence isn't confirmable by probing.
+      // is the only way to evict stale LiteSpeed-cached responses recorded
+      // from a build predating a proxy/auth fix (e.g. /login was found
+      // still serving demo-credentials hint text from before AUTH_MODE was
+      // ever set to production). It purges only the fixed, hardcoded paths
+      // listed below via LiteSpeed's documented response-header purge API -
+      // it never accepts a caller-supplied path, so it cannot be used to
+      // purge anything else, on this domain or any other. Gated by its own
+      // dedicated CACHE_PURGE_TOKEN (never reused from SETUP_TOKEN/
+      // AUTH_SECRET) supplied only via a request header, never a URL query
+      // string. A missing/wrong token gets a plain 404, not a 403, so the
+      // route's existence isn't confirmable by probing.
+      const CACHE_PURGE_PATHS = ["/dashboard", "/login"];
       if (req.url === "/__cache-purge") {
         const expected = process.env.CACHE_PURGE_TOKEN;
         const provided = req.headers["x-cache-purge-token"];
         if (expected && provided === expected) {
-          res.setHeader("X-LiteSpeed-Purge", "/dashboard");
+          res.setHeader("X-LiteSpeed-Purge", CACHE_PURGE_PATHS.join(","));
           res.statusCode = 200;
           res.end("purged");
         } else {
