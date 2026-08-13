@@ -7,6 +7,7 @@ import type { ProviderConnectionView } from "./types"
 const STATUS_LABEL: Record<ProviderConnectionView["status"], string> = {
   not_configured: "Needs setup",
   configured: "Configured",
+  connecting: "Connecting…",
   connected: "Connected",
   error: "Error",
   expired: "Expired",
@@ -16,6 +17,7 @@ const STATUS_LABEL: Record<ProviderConnectionView["status"], string> = {
 const STATUS_TONE: Record<ProviderConnectionView["status"], StatusTone> = {
   not_configured: "neutral",
   configured: "info",
+  connecting: "info",
   connected: "success",
   error: "error",
   expired: "warning",

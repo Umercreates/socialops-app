@@ -1,14 +1,23 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, ShieldOff } from "lucide-react"
+import { Loader2, ShieldOff, CircleCheck, CircleAlert } from "lucide-react"
 import { useAuth } from "@/lib/auth/auth-context"
 import { ProviderCard } from "./provider-card"
 import { ProviderDetailSheet } from "./provider-detail-sheet"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import type { ProviderConnectionView } from "./types"
-import { CATEGORY_LABELS, type ProviderCategory } from "@/lib/integrations/providers"
+import { CATEGORY_LABELS, isProviderId, type ProviderCategory } from "@/lib/integrations/providers"
 
-const CATEGORY_ORDER: ProviderCategory[] = ["ai", "messaging", "social", "calling", "google"]
+const CATEGORY_ORDER: ProviderCategory[] = ["ai", "messaging", "social", "calling", "productivity"]
+
+const OAUTH_RESULT_MESSAGE: Record<string, { tone: "success" | "error"; text: string }> = {
+  connected: { tone: "success", text: "Account connected successfully." },
+  denied: { tone: "error", text: "Authorization was cancelled or denied." },
+  invalid: { tone: "error", text: "That connection attempt expired or was invalid. Try again." },
+  not_configured: { tone: "error", text: "Save the app credentials before connecting." },
+  failed: { tone: "error", text: "The provider couldn't confirm the connection. Try again." },
+}
 
 export function IntegrationsPageContent() {
   const { user } = useAuth()
@@ -17,8 +26,24 @@ export function IntegrationsPageContent() {
   const [forbidden, setForbidden] = React.useState(false)
   const [selected, setSelected] = React.useState<ProviderConnectionView | null>(null)
   const [sheetOpen, setSheetOpen] = React.useState(false)
+  const [oauthResult, setOauthResult] = React.useState<{ tone: "success" | "error"; text: string } | null>(null)
+  const [pendingOAuthProvider, setPendingOAuthProvider] = React.useState<string | null>(null)
 
   const canManage = user?.role === "owner" || user?.role === "admin"
+
+  React.useEffect(() => {
+    function readOAuthRedirectParams() {
+      const params = new URLSearchParams(window.location.search)
+      const oauthStatus = params.get("oauth")
+      const oauthProvider = params.get("provider")
+      if (oauthStatus && OAUTH_RESULT_MESSAGE[oauthStatus]) {
+        setOauthResult(OAUTH_RESULT_MESSAGE[oauthStatus])
+        if (oauthProvider && isProviderId(oauthProvider)) setPendingOAuthProvider(oauthProvider)
+        window.history.replaceState({}, "", window.location.pathname)
+      }
+    }
+    readOAuthRedirectParams()
+  }, [])
 
   React.useEffect(() => {
     let cancelled = false
@@ -33,7 +58,16 @@ export function IntegrationsPageContent() {
         }
         if (!res.ok) throw new Error("Failed to load")
         const data = await res.json()
-        if (!cancelled) setProviders(data.providers)
+        if (cancelled) return
+        setProviders(data.providers)
+        if (pendingOAuthProvider) {
+          const match = (data.providers as ProviderConnectionView[]).find((p) => p.provider === pendingOAuthProvider)
+          if (match) {
+            setSelected(match)
+            setSheetOpen(true)
+          }
+          setPendingOAuthProvider(null)
+        }
       } catch {
         if (!cancelled) setError("Couldn't load integrations. Check your connection and try again.")
       }
@@ -43,7 +77,7 @@ export function IntegrationsPageContent() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [pendingOAuthProvider])
 
   function handleUpdated(updated: ProviderConnectionView) {
     setProviders((prev) => (prev ? prev.map((p) => (p.provider === updated.provider ? updated : p)) : prev))
@@ -91,6 +125,13 @@ export function IntegrationsPageContent() {
           Connect and manage the providers that power EasyLife — AI, WhatsApp, social platforms, calling, and Google.
         </p>
       </div>
+
+      {oauthResult && (
+        <Alert variant={oauthResult.tone === "error" ? "destructive" : "default"}>
+          {oauthResult.tone === "error" ? <CircleAlert /> : <CircleCheck />}
+          <AlertDescription>{oauthResult.text}</AlertDescription>
+        </Alert>
+      )}
 
       {grouped.map((group) => (
         <div key={group.category} className="flex flex-col gap-3">

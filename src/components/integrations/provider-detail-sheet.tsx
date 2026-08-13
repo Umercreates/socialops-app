@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, CircleAlert, CircleCheck, Copy } from "lucide-react"
+import { Loader2, CircleAlert, CircleCheck, Copy, Check, X, ExternalLink, Link2 } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { StatusBadge } from "@/components/dashboard/status-badge"
 import type { ProviderConnectionView, IntegrationMode } from "./types"
 import { PROVIDER_REGISTRY } from "@/lib/integrations/providers"
+import { cn } from "@/lib/utils"
 
 interface ProviderDetailSheetProps {
   provider: ProviderConnectionView | null
@@ -87,6 +88,21 @@ export function ProviderDetailSheet({ provider, canManage, open, onOpenChange, o
 
   const webhookUrl = def.requiresWebhook && def.webhookPath ? `${typeof window !== "undefined" ? window.location.origin : ""}${def.webhookPath}` : null
 
+  const checklist: { label: string; done: boolean }[] = [
+    { label: "Required credentials saved", done: provider.readiness.credentialsComplete },
+    ...(def.requiresOAuth ? [{ label: "Account connected (OAuth)", done: provider.readiness.oauthComplete }] : []),
+    ...(def.requiresWebhook ? [{ label: "Webhook verified", done: provider.readiness.webhookComplete }] : []),
+    { label: "Test Connection passed", done: provider.readiness.testPassed },
+  ]
+
+  function handleConnectAccount() {
+    // Deliberate full navigation, not client-side routing: this hits a
+    // route handler that itself issues a redirect to an external OAuth
+    // provider's domain, which router.push() isn't meant for.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.href = `/api/oauth/${provider!.provider}/start`
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col gap-5 overflow-y-auto sm:max-w-md">
@@ -110,6 +126,32 @@ export function ProviderDetailSheet({ provider, canManage, open, onOpenChange, o
             </Alert>
           )}
 
+          <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+            <span className="text-xs font-medium text-muted-foreground">Setup checklist</span>
+            {checklist.map((item) => (
+              <div key={item.label} className="flex items-center gap-2 text-sm">
+                {item.done ? (
+                  <Check className="size-3.5 shrink-0 text-success" />
+                ) : (
+                  <X className="size-3.5 shrink-0 text-muted-foreground" />
+                )}
+                <span className={cn(item.done ? "text-foreground" : "text-muted-foreground")}>{item.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {def.setupDocsUrl && (
+            <a
+              href={def.setupDocsUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="flex w-fit items-center gap-1.5 text-xs text-brand hover:underline"
+            >
+              <ExternalLink className="size-3" />
+              Official setup documentation
+            </a>
+          )}
+
           {canManage && def.supportedModes.length > 1 && (
             <div className="flex flex-col gap-1.5">
               <Label>Mode</Label>
@@ -130,30 +172,61 @@ export function ProviderDetailSheet({ provider, canManage, open, onOpenChange, o
 
           {def.credentialFields.length > 0 && (
             <div className="flex flex-col gap-4">
-              <span className="text-sm font-medium text-foreground">Credentials</span>
-              {provider.credentialFields.map((field) => (
-                <div key={field.key} className="flex flex-col gap-1.5">
-                  <Label htmlFor={field.key}>
-                    {field.label}
-                    {field.required && <span className="text-destructive"> *</span>}
-                  </Label>
-                  {canManage ? (
-                    <Input
-                      id={field.key}
-                      type={field.secret ? "password" : "text"}
-                      placeholder={field.configured ? field.maskedValue ?? "Configured" : `Enter ${field.label.toLowerCase()}`}
-                      value={fields[field.key] ?? ""}
-                      onChange={(e) => setFields((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                    />
-                  ) : (
-                    <div className="flex h-9 items-center rounded-md border border-border bg-muted/40 px-3 text-sm text-muted-foreground">
-                      {field.configured ? (field.maskedValue ?? "Configured") : "Not configured"}
-                    </div>
-                  )}
-                </div>
-              ))}
+              <span className="text-sm font-medium text-foreground">
+                {def.requiresOAuth ? "App credentials" : "Credentials"}
+              </span>
+              {provider.credentialFields.map((field) => {
+                const meta = def.credentialFields.find((f) => f.key === field.key)
+                return (
+                  <div key={field.key} className="flex flex-col gap-1.5">
+                    <Label htmlFor={field.key}>
+                      {field.label}
+                      {field.required && <span className="text-destructive"> *</span>}
+                    </Label>
+                    {meta?.description && <p className="text-xs text-muted-foreground">{meta.description}</p>}
+                    {canManage ? (
+                      <Input
+                        id={field.key}
+                        type={field.secret ? "password" : "text"}
+                        placeholder={field.configured ? field.maskedValue ?? "Configured" : `Enter ${field.label.toLowerCase()}`}
+                        value={fields[field.key] ?? ""}
+                        onChange={(e) => setFields((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                      />
+                    ) : (
+                      <div className="flex h-9 items-center rounded-md border border-border bg-muted/40 px-3 text-sm text-muted-foreground">
+                        {field.configured ? (field.maskedValue ?? "Configured") : "Not configured"}
+                      </div>
+                    )}
+                    {meta?.helpUrl && (
+                      <a href={meta.helpUrl} target="_blank" rel="noreferrer noopener" className="flex w-fit items-center gap-1 text-xs text-brand hover:underline">
+                        <ExternalLink className="size-3" />
+                        Where to find this
+                      </a>
+                    )}
+                  </div>
+                )
+              })}
               {canManage && (
                 <p className="text-xs text-muted-foreground">Leave a field blank to keep its current saved value.</p>
+              )}
+            </div>
+          )}
+
+          {def.requiresOAuth && canManage && (
+            <div className="flex flex-col gap-1.5">
+              <Label>Account connection</Label>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-fit"
+                onClick={handleConnectAccount}
+                disabled={!provider.readiness.credentialsComplete}
+              >
+                <Link2 className="size-4" />
+                {provider.readiness.oauthComplete ? "Reconnect account" : "Connect Account"}
+              </Button>
+              {!provider.readiness.credentialsComplete && (
+                <p className="text-xs text-muted-foreground">Save the app credentials above first.</p>
               )}
             </div>
           )}
