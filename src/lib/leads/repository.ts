@@ -51,6 +51,20 @@ export async function listLeads(params: ListLeadsParams): Promise<{ leads: Lead[
   })
 }
 
+/** Used by the WhatsApp webhook pipeline to resolve an inbound message to
+ * an existing lead before falling back to creating a new one. */
+export async function findLeadByWhatsAppNumber(workspaceId: string, whatsappNumber: string): Promise<Lead | null> {
+  return withDb(async (db) => {
+    const rows = await db
+      .select()
+      .from(leads)
+      .where(and(eq(leads.workspaceId, workspaceId), eq(leads.whatsappNumber, whatsappNumber)))
+      .limit(1)
+    const row = rows[0]
+    return row ? leadRowToLead(row) : null
+  })
+}
+
 export async function getLead(workspaceId: string, leadId: string): Promise<Lead | null> {
   return withDb(async (db) => {
     // Scoped by workspace_id + id together, per Phase 2's isolation rule —
