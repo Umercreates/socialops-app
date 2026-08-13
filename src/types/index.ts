@@ -49,7 +49,7 @@ export interface SocialAccount {
   profileImageUrl?: string
 }
 
-export type PostStatus = "draft" | "scheduled" | "published" | "failed"
+export type PostStatus = "draft" | "scheduled" | "publishing" | "published" | "partially_failed" | "failed"
 
 export type MediaType = "image" | "video"
 
