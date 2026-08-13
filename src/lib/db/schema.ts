@@ -126,3 +126,74 @@ export const loginAttempts = socialops.table("login_attempts", {
   success: boolean("success").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 })
+
+// ---------------------------------------------------------------------------
+// Phase 3: APIs & Integrations Control Center + WhatsApp Cloud API pipeline
+// ---------------------------------------------------------------------------
+
+export const integrationConnections = socialops.table("integration_connections", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  provider: text("provider").notNull(),
+  mode: text("mode").notNull().default("disabled"),
+  status: text("status").notNull().default("not_configured"),
+  displayName: text("display_name"),
+  config: jsonb("config").notNull().default({}),
+  secretDataEncrypted: jsonb("secret_data_encrypted").notNull().default({}),
+  lastTestedAt: timestamp("last_tested_at", { withTimezone: true }),
+  lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+  lastErrorCode: text("last_error_code"),
+  lastErrorMessage: text("last_error_message"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const integrationAuditLog = socialops.table("integration_audit_log", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  provider: text("provider").notNull(),
+  action: text("action").notNull(),
+  actorUserId: uuid("actor_user_id"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const whatsappAccounts = socialops.table("whatsapp_accounts", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  integrationConnectionId: uuid("integration_connection_id"),
+  phoneNumberId: text("phone_number_id").notNull(),
+  wabaId: text("waba_id").notNull(),
+  displayPhoneNumber: text("display_phone_number"),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const whatsappConversations = socialops.table("whatsapp_conversations", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  whatsappAccountId: uuid("whatsapp_account_id").notNull(),
+  contactPhone: text("contact_phone").notNull(),
+  contactName: text("contact_name"),
+  leadId: uuid("lead_id"),
+  status: text("status").notNull().default("bot"),
+  botState: jsonb("bot_state").notNull().default({}),
+  lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const whatsappMessages = socialops.table("whatsapp_messages", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  conversationId: uuid("conversation_id").notNull(),
+  externalMessageId: text("external_message_id"),
+  direction: text("direction").notNull(),
+  messageType: text("message_type").notNull().default("text"),
+  body: text("body"),
+  providerStatus: text("provider_status").notNull().default("received"),
+  sender: text("sender").notNull().default("customer"),
+  rawMetadata: jsonb("raw_metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})
