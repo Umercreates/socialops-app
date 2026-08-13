@@ -1,9 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { LayoutGrid, List, Search } from "lucide-react"
+import { LayoutGrid, List, Search, Loader2, CircleAlert, RotateCw } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { LeadsKanban } from "@/components/leads/leads-kanban"
 import { LeadsTable } from "@/components/leads/leads-table"
 import { LEAD_STATUS_LABEL } from "@/lib/lead-status"
@@ -15,7 +17,7 @@ type View = "kanban" | "table"
 type StatusFilter = "all" | LeadIntentStatus
 
 export function LeadsPageContent() {
-  const { leads } = useLeads()
+  const { leads, isLoading, error, refetch } = useLeads()
   const [view, setView] = React.useState<View>("kanban")
   const [query, setQuery] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all")
@@ -89,7 +91,29 @@ export function LeadsPageContent() {
         <span className="ml-auto text-xs text-muted-foreground">{filtered.length} leads</span>
       </div>
 
-      {view === "kanban" ? <LeadsKanban leads={filtered} /> : <LeadsTable leads={filtered} />}
+      {error && (
+        <Alert variant="destructive">
+          <CircleAlert />
+          <AlertDescription className="flex flex-1 items-center justify-between gap-3">
+            {error}
+            <Button type="button" variant="outline" size="xs" onClick={refetch}>
+              <RotateCw />
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {isLoading && leads.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" />
+          Loading leads…
+        </div>
+      ) : view === "kanban" ? (
+        <LeadsKanban leads={filtered} />
+      ) : (
+        <LeadsTable leads={filtered} />
+      )}
     </div>
   )
 }

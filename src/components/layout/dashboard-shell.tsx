@@ -10,11 +10,12 @@ import type { Notification } from "@/types"
 interface DashboardShellProps {
   children: React.ReactNode
   notifications: Notification[]
+  crmMode?: "demo" | "database"
 }
 
-export function DashboardShell({ children, notifications }: DashboardShellProps) {
+export function DashboardShell({ children, notifications, crmMode = "demo" }: DashboardShellProps) {
   return (
-    <MockDataProvider>
+    <MockDataProvider crmMode={crmMode}>
       <SidebarProvider>
         <div className="flex min-h-screen w-full bg-background">
           <AppSidebar />

@@ -25,7 +25,7 @@ export interface User {
   name: string
   email: string
   avatarUrl?: string
-  role: "owner" | "admin" | "editor" | "viewer"
+  role: "owner" | "admin" | "manager" | "sales"
 }
 
 export interface Workspace {

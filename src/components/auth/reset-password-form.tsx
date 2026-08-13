@@ -2,21 +2,44 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { Eye, EyeOff, Loader2, CircleAlert, CircleCheck } from "lucide-react"
+import { Eye, EyeOff, Loader2, CircleAlert, CircleCheck, Mail } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { mockResetPassword } from "@/lib/auth/mock-auth"
+import { useAuth } from "@/lib/auth/auth-context"
 
 export function ResetPasswordForm() {
+  const { authMode } = useAuth()
   const [password, setPassword] = React.useState("")
   const [confirmPassword, setConfirmPassword] = React.useState("")
   const [showPassword, setShowPassword] = React.useState(false)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [isDone, setIsDone] = React.useState(false)
+
+  // Reset links can only exist via email delivery, which isn't configured
+  // yet — never show a fake success flow for a real production account.
+  if (authMode === "production") {
+    return (
+      <div className="flex flex-col items-center gap-4 text-center">
+        <div className="flex size-12 items-center justify-center rounded-2xl bg-muted">
+          <Mail className="size-5.5 text-muted-foreground" strokeWidth={1.75} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Password recovery isn&apos;t set up yet</h1>
+          <p className="text-sm text-muted-foreground text-balance">
+            This link can&apos;t be used yet. Contact your workspace owner to have your password reset directly.
+          </p>
+        </div>
+        <Button render={<Link href="/login" />} nativeButton={false} variant="outline" className="mt-2 w-full">
+          Back to sign in
+        </Button>
+      </div>
+    )
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
