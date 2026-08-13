@@ -52,5 +52,8 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/dashboard/:path*", "/login", "/forgot-password", "/reset-password"],
+  // "/dashboard/:path*" requires the literal trailing slash to match, so it
+  // does NOT match the bare "/dashboard" route on its own — both are listed
+  // explicitly so the dashboard root is never left unprotected.
+  matcher: ["/", "/dashboard", "/dashboard/:path*", "/login", "/forgot-password", "/reset-password"],
 }
