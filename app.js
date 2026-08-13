@@ -45,6 +45,31 @@ app
   .prepare()
   .then(() => {
     const server = createServer((req, res) => {
+      // Cache-maintenance escape hatch: this host's cPanel account has no
+      // self-service LiteSpeed cache-manager UI and no SSH access, so this
+      // is the only way to evict a stale LiteSpeed-cached response for
+      // /dashboard (e.g. one recorded from a build predating a proxy/auth
+      // fix). It purges exactly one hardcoded URL via LiteSpeed's documented
+      // response-header purge API — it never accepts a caller-supplied path,
+      // so it cannot be used to purge anything else, on this domain or any
+      // other. Gated by its own dedicated CACHE_PURGE_TOKEN (never reused
+      // from SETUP_TOKEN/AUTH_SECRET) supplied only via a request header,
+      // never a URL query string. A missing/wrong token gets a plain 404,
+      // not a 403, so the route's existence isn't confirmable by probing.
+      if (req.url === "/__cache-purge") {
+        const expected = process.env.CACHE_PURGE_TOKEN;
+        const provided = req.headers["x-cache-purge-token"];
+        if (expected && provided === expected) {
+          res.setHeader("X-LiteSpeed-Purge", "url=/dashboard");
+          res.statusCode = 200;
+          res.end("purged");
+        } else {
+          res.statusCode = 404;
+          res.end("Not Found");
+        }
+        return;
+      }
+
       handleRequest(req, res).catch((error) => {
         // Never leak stack traces/secrets to the client in production.
         console.error("Unhandled request error:", error);
