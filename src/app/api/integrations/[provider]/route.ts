@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from "@/lib/auth/guard"
 import { verifySameOrigin } from "@/lib/auth/csrf"
 import { isProviderId, PROVIDER_REGISTRY } from "@/lib/integrations/providers"
 import { getProviderView, saveConnection, disableConnection, removeConnection } from "@/lib/integrations/service"
+import { evaluateProviderReadiness } from "@/lib/integrations/readiness"
 import { apiError } from "@/lib/api/errors"
 
 export async function GET(_request: Request, ctx: { params: Promise<{ provider: string }> }) {
@@ -59,6 +60,21 @@ export async function PUT(request: Request, ctx: { params: Promise<{ provider: s
     }
     if (body.mode && !def.supportedModes.includes(body.mode)) {
       return NextResponse.json({ error: `${def.name} does not support "${body.mode}" mode` }, { status: 400 })
+    }
+
+    // Live mode must be genuinely earned, never just requested - only a
+    // provider that's already fully readiness-checked (existing credentials/
+    // OAuth/webhook/passing test) can be flipped to live from here. New
+    // credentials being saved this same call haven't been tested yet, so
+    // this checks the state as it stood *before* this save.
+    if (body.mode === "live") {
+      const readiness = await evaluateProviderReadiness(auth.ctx.workspaceId, provider)
+      if (!readiness.readyForLive) {
+        return NextResponse.json(
+          { error: "Cannot enable live mode yet.", missing: readiness.missing },
+          { status: 400 }
+        )
+      }
     }
 
     const view = await saveConnection({

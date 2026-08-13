@@ -12,6 +12,16 @@ export interface ProviderCredentialFieldView {
   source: "workspace" | "environment" | "none"
 }
 
+export interface ProviderReadinessView {
+  configured: boolean
+  credentialsComplete: boolean
+  oauthComplete: boolean
+  webhookComplete: boolean
+  testPassed: boolean
+  readyForLive: boolean
+  missing: string[]
+}
+
 export interface ProviderConnectionView {
   provider: ProviderId
   name: string
@@ -27,4 +37,5 @@ export interface ProviderConnectionView {
   lastSuccessAt: string | null
   lastErrorMessage: string | null
   updatedAt: string | null
+  readiness: ProviderReadinessView
 }

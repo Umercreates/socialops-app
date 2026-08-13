@@ -1,4 +1,4 @@
-import { pgSchema, text, integer, timestamp, uuid, jsonb, boolean } from "drizzle-orm/pg-core"
+import { pgSchema, text, integer, timestamp, uuid, jsonb, boolean, date } from "drizzle-orm/pg-core"
 
 /**
  * Drizzle schema mirroring migrations/0001_init.sql exactly. The raw SQL
@@ -195,5 +195,204 @@ export const whatsappMessages = socialops.table("whatsapp_messages", {
   providerStatus: text("provider_status").notNull().default("received"),
   sender: text("sender").notNull().default("customer"),
   rawMetadata: jsonb("raw_metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+// ---------------------------------------------------------------------------
+// Phase 4: provider-ready platform architecture
+// ---------------------------------------------------------------------------
+
+export const oauthStates = socialops.table("oauth_states", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  provider: text("provider").notNull(),
+  actorUserId: uuid("actor_user_id"),
+  state: text("state").notNull().unique(),
+  codeVerifier: text("code_verifier"),
+  redirectPath: text("redirect_path"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+})
+
+export const webhookEvents = socialops.table("webhook_events", {
+  id: uuid("id").primaryKey(),
+  provider: text("provider").notNull(),
+  workspaceId: uuid("workspace_id"),
+  externalEventId: text("external_event_id"),
+  eventType: text("event_type"),
+  processingStatus: text("processing_status").notNull().default("received"),
+  payloadSummary: jsonb("payload_summary"),
+  errorCode: text("error_code"),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+})
+
+export const jobs = socialops.table("jobs", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  type: text("type").notNull(),
+  payload: jsonb("payload").notNull().default({}),
+  status: text("status").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(3),
+  availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  lockedBy: text("locked_by"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const socialAccounts = socialops.table("social_accounts", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  provider: text("provider").notNull(),
+  integrationConnectionId: uuid("integration_connection_id"),
+  externalAccountId: text("external_account_id").notNull(),
+  accountName: text("account_name").notNull(),
+  username: text("username"),
+  avatarUrl: text("avatar_url"),
+  accountType: text("account_type"),
+  status: text("status").notNull().default("connected"),
+  capabilities: text("capabilities").array().notNull().default([]),
+  followers: integer("followers").notNull().default(0),
+  followersDelta30d: integer("followers_delta_30d").notNull().default(0),
+  connectedAt: timestamp("connected_at", { withTimezone: true }),
+  lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const posts = socialops.table("posts", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  authorUserId: uuid("author_user_id"),
+  title: text("title").notNull().default(""),
+  status: text("status").notNull().default("draft"),
+  baseCaption: text("base_caption").notNull().default(""),
+  baseHashtags: text("base_hashtags").notNull().default(""),
+  media: jsonb("media").notNull().default([]),
+  platforms: text("platforms").array().notNull().default([]),
+  variants: jsonb("variants").notNull().default([]),
+  scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const postTargets = socialops.table("post_targets", {
+  id: uuid("id").primaryKey(),
+  postId: uuid("post_id").notNull(),
+  workspaceId: uuid("workspace_id").notNull(),
+  socialAccountId: uuid("social_account_id").notNull(),
+  provider: text("provider").notNull(),
+  status: text("status").notNull().default("pending"),
+  externalPostId: text("external_post_id"),
+  errorMessage: text("error_message"),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const automations = socialops.table("automations", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  name: text("name").notNull(),
+  status: text("status").notNull().default("draft"),
+  platform: text("platform").notNull().default("all"),
+  trigger: jsonb("trigger").notNull().default({}),
+  condition: jsonb("condition").notNull().default({}),
+  action: jsonb("action").notNull().default({}),
+  rules: jsonb("rules").notNull().default({}),
+  runsLast30d: integer("runs_last_30d").notNull().default(0),
+  lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const automationRuns = socialops.table("automation_runs", {
+  id: uuid("id").primaryKey(),
+  automationId: uuid("automation_id").notNull(),
+  workspaceId: uuid("workspace_id").notNull(),
+  triggerContext: jsonb("trigger_context"),
+  status: text("status").notNull().default("running"),
+  errorMessage: text("error_message"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+})
+
+export const notifications = socialops.table("notifications", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  userId: uuid("user_id"),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  link: text("link"),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const auditLog = socialops.table("audit_log", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  actorUserId: uuid("actor_user_id"),
+  action: text("action").notNull(),
+  resourceType: text("resource_type"),
+  resourceId: text("resource_id"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const comments = socialops.table("comments", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  socialAccountId: uuid("social_account_id"),
+  provider: text("provider").notNull(),
+  externalPostId: text("external_post_id"),
+  externalCommentId: text("external_comment_id"),
+  parentCommentId: uuid("parent_comment_id"),
+  postExcerpt: text("post_excerpt"),
+  authorName: text("author_name").notNull(),
+  authorHandle: text("author_handle"),
+  body: text("body").notNull(),
+  sentiment: text("sentiment").notNull().default("neutral"),
+  status: text("status").notNull().default("open"),
+  leadId: uuid("lead_id"),
+  markedAsLead: boolean("marked_as_lead").notNull().default(false),
+  whatsappCtaSentAt: timestamp("whatsapp_cta_sent_at", { withTimezone: true }),
+  dmSentAt: timestamp("dm_sent_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const workspaceSettings = socialops.table("workspace_settings", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull().unique(),
+  timezone: text("timezone").notNull().default("UTC"),
+  defaultLanguage: text("default_language").notNull().default("en"),
+  leadScoreThreshold: integer("lead_score_threshold").notNull().default(70),
+  humanHandoffRules: jsonb("human_handoff_rules").notNull().default({}),
+  notificationPreferences: jsonb("notification_preferences").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const providerAnalyticsSnapshots = socialops.table("provider_analytics_snapshots", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  socialAccountId: uuid("social_account_id"),
+  provider: text("provider").notNull(),
+  metricDate: date("metric_date").notNull(),
+  followers: integer("followers"),
+  impressions: integer("impressions"),
+  reach: integer("reach"),
+  likes: integer("likes"),
+  comments: integer("comments"),
+  shares: integer("shares"),
+  clicks: integer("clicks"),
+  dmVolume: integer("dm_volume"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 })
