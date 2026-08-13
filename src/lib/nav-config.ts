@@ -14,6 +14,7 @@ import {
   MessagesSquare,
   PhoneCall,
   Contact,
+  Plug,
   type LucideIcon,
 } from "lucide-react"
 
@@ -40,6 +41,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { title: "WhatsApp", href: "/dashboard/whatsapp", icon: MessagesSquare },
   { title: "Call Agent", href: "/dashboard/call-agent", icon: PhoneCall },
   { title: "Leads / CRM", href: "/dashboard/leads", icon: Contact },
+  { title: "APIs & Integrations", href: "/dashboard/integrations", icon: Plug },
 ]
 
 export const SETTINGS_NAV_ITEM: NavItem = {

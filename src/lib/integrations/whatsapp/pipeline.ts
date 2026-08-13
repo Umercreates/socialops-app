@@ -1,0 +1,162 @@
+import type { LeadStage } from "@/types"
+import { findLeadByWhatsAppNumber, getLead, createLead, updateLead, createActivity } from "@/lib/leads/repository"
+import { bandForScore } from "@/lib/leads/scoring"
+import {
+  ensureWhatsAppAccount,
+  ensureConversation,
+  updateConversation,
+  insertInboundMessageIfNew,
+  insertOutboundMessage,
+  listMessages,
+} from "./repository"
+import { sendWhatsAppTextMessage } from "./cloud-api"
+import { runQualificationTurn, scoreQualification, type KnownQualification, type ConversationTurn } from "./gemini-qualification"
+
+const STAGE_ORDER: LeadStage[] = ["whatsapp-started", "qualifying", "interested", "qualified", "ready-for-sales"]
+
+function nextStage(currentStage: LeadStage, score: number, escalate: boolean): LeadStage {
+  let target: LeadStage
+  if (escalate) {
+    target = score >= 51 ? "ready-for-sales" : "human-followup"
+  } else if (score >= 71) {
+    target = "qualified"
+  } else if (score >= 51) {
+    target = "interested"
+  } else if (score >= 31) {
+    target = "qualifying"
+  } else {
+    target = "whatsapp-started"
+  }
+
+  if (target === "human-followup") return target
+  const currentIndex = STAGE_ORDER.indexOf(currentStage)
+  const targetIndex = STAGE_ORDER.indexOf(target)
+  if (currentIndex === -1 || targetIndex > currentIndex) return target
+  return currentStage
+}
+
+export interface InboundTextMessage {
+  workspaceId: string
+  integrationConnectionId: string | null
+  wabaId: string
+  phoneNumberId: string
+  displayPhoneNumber: string | null
+  accessToken: string
+  from: string
+  contactName: string | null
+  externalMessageId: string
+  messageType: string
+  body: string | null
+  rawMetadata: Record<string, unknown>
+}
+
+/** Full inbound flow: dedupe -> resolve conversation/lead -> (text only)
+ * qualify via Gemini -> score -> sync CRM -> send + persist reply. Returns
+ * `{ duplicate: true }` if this external message ID was already processed,
+ * so the webhook route can always answer 200 without reprocessing. */
+export async function processInboundMessage(msg: InboundTextMessage): Promise<{ duplicate: boolean; escalated?: boolean }> {
+  const account = await ensureWhatsAppAccount(
+    msg.workspaceId,
+    msg.integrationConnectionId,
+    msg.phoneNumberId,
+    msg.wabaId,
+    msg.displayPhoneNumber
+  )
+  const conversation = await ensureConversation(msg.workspaceId, account.id, msg.from)
+
+  const inserted = await insertInboundMessageIfNew(
+    msg.workspaceId,
+    conversation.id,
+    msg.externalMessageId,
+    msg.messageType,
+    msg.body,
+    msg.rawMetadata
+  )
+  if (!inserted) return { duplicate: true }
+
+  // Resolve or create the CRM lead this conversation belongs to.
+  let lead = conversation.leadId
+    ? await getLead(msg.workspaceId, conversation.leadId)
+    : await findLeadByWhatsAppNumber(msg.workspaceId, msg.from)
+
+  if (!lead) {
+    lead = await createLead({
+      workspaceId: msg.workspaceId,
+      actorUserId: null,
+      name: msg.contactName ?? "WhatsApp Lead",
+      whatsappNumber: msg.from,
+      sourcePlatform: "whatsapp",
+      stage: "whatsapp-started",
+      status: "cold",
+    })
+    await createActivity(msg.workspaceId, lead.id, null, "whatsapp-started", "Started a WhatsApp conversation")
+  }
+  if (!conversation.leadId) {
+    await updateConversation(msg.workspaceId, conversation.id, { leadId: lead.id })
+  }
+  const leadId = lead.id
+
+  if (msg.body) {
+    const snippet = msg.body.length > 140 ? `${msg.body.slice(0, 140)}…` : msg.body
+    await createActivity(msg.workspaceId, leadId, null, "whatsapp-message", `Customer: ${snippet}`)
+  }
+
+  // Non-text messages and already-escalated conversations are stored but
+  // don't run the bot — a human is expected to take it from here.
+  if (msg.messageType !== "text" || !msg.body || conversation.status === "escalated" || conversation.status === "human") {
+    await updateConversation(msg.workspaceId, conversation.id, { lastMessageAt: new Date() })
+    return { duplicate: false }
+  }
+
+  const known = (conversation.botState ?? {}) as KnownQualification
+  const recentRows = await listMessages(msg.workspaceId, conversation.id, 12)
+  const recentTurns: ConversationTurn[] = recentRows
+    .filter((r) => r.body)
+    .map((r) => ({ sender: r.direction === "inbound" ? "customer" : "bot", body: r.body as string }))
+
+  const turn = await runQualificationTurn(known, recentTurns, msg.body)
+  const mergedKnown: KnownQualification = { ...known, ...turn.extracted }
+
+  const turnCount = recentRows.length + 1
+  const scoreResult = scoreQualification(mergedKnown, turnCount, turn.escalate)
+  const band = bandForScore(scoreResult.score)
+  const currentStage: LeadStage = (lead.stage as LeadStage) ?? "whatsapp-started"
+  const targetStage = nextStage(currentStage, scoreResult.score, turn.escalate)
+
+  await updateLead(msg.workspaceId, leadId, null, {
+    name: mergedKnown.name,
+    businessType: mergedKnown.businessType,
+    location: mergedKnown.location,
+    serviceInterested: mergedKnown.serviceInterested,
+    requirement: mergedKnown.requirement,
+    painPoint: mergedKnown.painPoint,
+    budget: mergedKnown.budget,
+    timeline: mergedKnown.timeline,
+    leadScore: scoreResult.score,
+    stage: targetStage,
+    status: band.status,
+    callPermission: scoreResult.callPermission,
+  })
+
+  if (turn.escalate && turn.escalationReason) {
+    await createActivity(msg.workspaceId, leadId, null, "qualification-updated", `Escalated to human: ${turn.escalationReason}`)
+  }
+
+  const sendResult = await sendWhatsAppTextMessage(msg.phoneNumberId, msg.accessToken, msg.from, turn.reply)
+  await insertOutboundMessage(
+    msg.workspaceId,
+    conversation.id,
+    turn.reply,
+    "bot",
+    sendResult.externalMessageId ?? null,
+    sendResult.ok ? "sent" : "failed"
+  )
+
+  await updateConversation(msg.workspaceId, conversation.id, {
+    botState: mergedKnown as Record<string, unknown>,
+    status: turn.escalate ? "escalated" : "bot",
+    lastMessageAt: new Date(),
+  })
+
+  return { duplicate: false, escalated: turn.escalate }
+}
