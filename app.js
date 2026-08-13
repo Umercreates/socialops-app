@@ -64,7 +64,7 @@ app
         const expected = process.env.CACHE_PURGE_TOKEN;
         const provided = req.headers["x-cache-purge-token"];
         if (expected && provided === expected) {
-          res.setHeader("X-LiteSpeed-Purge", "url=/dashboard");
+          res.setHeader("X-LiteSpeed-Purge", "/dashboard");
           res.statusCode = 200;
           res.end("purged");
         } else {
