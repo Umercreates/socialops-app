@@ -1,32 +1,36 @@
 /**
  * Production entry point for cPanel / CloudLinux Node.js App (Phusion
  * Passenger). This is the file cPanel's "Application startup file" setting
- * points to — Passenger runs `node app.js` directly and expects it to bind
+ * points to - Passenger runs `node app.js` directly and expects it to bind
  * to the port Passenger assigns via `process.env.PORT`.
  *
  * This is plain CommonJS on purpose: cPanel/Passenger runs this file
  * directly with Node, with no TypeScript/bundler step in front of it, so it
  * must be valid, dependency-light JS on its own. It does the same thing
- * `next start` does — boot the standard Next.js production request handler
- * — just via the programmatic Custom Server API instead of the Next CLI,
+ * `next start` does - boot the standard Next.js production request handler
+ * - just via the programmatic Custom Server API instead of the Next CLI,
  * because Passenger needs an `app.js` it can `require`/execute directly
  * rather than a CLI command.
  *
  * This file assumes a completed `next build` (a `.next/` production build)
- * already exists in this directory — it does not build the app itself.
+ * already exists in this directory - it does not build the app itself.
  *
  * `turbopack: false` is required here: Turbopack needs a platform-specific
  * native binary, and shared hosts with an older glibc than the binary
- * requires can't load it — Next falls back to WASM bindings, which
+ * requires can't load it - Next falls back to WASM bindings, which
  * explicitly don't support Turbopack and crash on `prepare()`. The build
  * itself also runs with `next build --webpack` (see package.json) to match.
  *
  * `dev` is hardcoded false, not derived from NODE_ENV: this file has
- * exactly one job — serve the pre-built `.next` in production — so it must
+ * exactly one job - serve the pre-built `.next` in production - so it must
  * never silently fall into dev mode (which needs a working bundler at
  * request time) just because a host's stored NODE_ENV value isn't the
  * exact string "production" (e.g. a differently-cased value from a
  * hosting panel's own env var UI).
+ *
+ * Plain ASCII only in this file's comments: cPanel's Fileman UAPI has been
+ * observed to mis-decode non-ASCII bytes (e.g. em dashes) on save, so
+ * anything synced here directly (not via a build artifact) stays ASCII-safe.
  */
 
 const { createServer } = require("node:http");
@@ -50,7 +54,7 @@ app
       // is the only way to evict a stale LiteSpeed-cached response for
       // /dashboard (e.g. one recorded from a build predating a proxy/auth
       // fix). It purges exactly one hardcoded URL via LiteSpeed's documented
-      // response-header purge API — it never accepts a caller-supplied path,
+      // response-header purge API - it never accepts a caller-supplied path,
       // so it cannot be used to purge anything else, on this domain or any
       // other. Gated by its own dedicated CACHE_PURGE_TOKEN (never reused
       // from SETUP_TOKEN/AUTH_SECRET) supplied only via a request header,
