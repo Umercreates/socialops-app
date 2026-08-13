@@ -7,6 +7,8 @@ import { users, workspaces, workspaceMembers, sessions, leads, leadActivities } 
 import { hashPassword, normalizeEmail } from "@/lib/auth/password"
 import { createSession } from "@/lib/auth/session"
 import { apiError } from "@/lib/api/errors"
+import { enqueueJob, type JobType } from "@/lib/jobs/queue"
+import { jobs } from "@/lib/db/schema"
 
 /**
  * Temporary, SETUP_TOKEN-gated Phase 4 verification tooling only - same
@@ -36,6 +38,14 @@ const actionSchema = z.discriminatedUnion("action", [
     role: z.enum(["owner", "admin", "manager", "sales"]).default("owner"),
   }),
   z.object({ action: z.literal("teardown-fixtures") }),
+  z.object({
+    action: z.literal("enqueue-test-job"),
+    workspaceId: z.string().uuid(),
+    type: z.string(),
+    payload: z.record(z.string(), z.unknown()).default({}),
+    maxAttempts: z.number().int().min(1).max(10).default(2),
+  }),
+  z.object({ action: z.literal("inspect-job"), jobId: z.string().uuid() }),
 ])
 
 export async function POST(request: Request) {
@@ -67,6 +77,34 @@ export async function POST(request: Request) {
 
       const { cookieValue } = await createSession({ userId, workspaceId, rememberMe: false })
       return NextResponse.json({ userId, workspaceId, email, password, sessionCookie: cookieValue })
+    }
+
+    if (body.action === "enqueue-test-job") {
+      const jobId = await enqueueJob({
+        workspaceId: body.workspaceId,
+        type: body.type as JobType,
+        payload: body.payload,
+        maxAttempts: body.maxAttempts,
+      })
+      return NextResponse.json({ jobId })
+    }
+
+    if (body.action === "inspect-job") {
+      const row = await withDb(async (db) => {
+        const rows = await db.select().from(jobs).where(eq(jobs.id, body.jobId)).limit(1)
+        return rows[0] ?? null
+      })
+      if (!row) return NextResponse.json({ error: "Job not found" }, { status: 404 })
+      return NextResponse.json({
+        id: row.id,
+        status: row.status,
+        attempts: row.attempts,
+        maxAttempts: row.maxAttempts,
+        availableAt: row.availableAt,
+        lastError: row.lastError,
+        lockedBy: row.lockedBy,
+        completedAt: row.completedAt,
+      })
     }
 
     const summary = await withDb(async (db) => {
