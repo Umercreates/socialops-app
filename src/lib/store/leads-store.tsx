@@ -6,17 +6,13 @@ import { LEADS, LEAD_ACTIVITIES } from "@/lib/data/leads"
 import { nowIso } from "@/lib/data/constants"
 import { bandForScore } from "@/lib/leads/scoring"
 import { createListStore } from "./create-list-store"
+import { LeadsContext, type LeadsContextValue, useLeads } from "./leads-context"
+import { DatabaseLeadsProvider } from "./leads-store-remote"
+
+export { useLeads }
 
 const leadsStore = createListStore<Lead>(LEADS)
 const activitiesStore = createListStore<LeadActivity>(LEAD_ACTIVITIES)
-
-export function LeadsProvider({ children }: { children: React.ReactNode }) {
-  return (
-    <leadsStore.Provider>
-      <activitiesStore.Provider>{children}</activitiesStore.Provider>
-    </leadsStore.Provider>
-  )
-}
 
 let idCounter = 0
 export function generateLeadId() {
@@ -28,7 +24,9 @@ function generateActivityId(leadId: string) {
   return `${leadId}_act_new_${idCounter}`
 }
 
-export function useLeads() {
+/** In-memory demo implementation — unchanged behavior from before Phase 2,
+ * just now feeding the shared LeadsContext instead of its own hook. */
+function DemoLeadsBridge({ children }: { children: React.ReactNode }) {
   const { items: leads, setItems: setLeads } = leadsStore.useRawStore()
   const { items: activities, setItems: setActivities } = activitiesStore.useRawStore()
 
@@ -115,9 +113,7 @@ export function useLeads() {
 
   const addNote = React.useCallback(
     (id: string, note: string) => {
-      setLeads((prev) =>
-        prev.map((l) => (l.id === id ? { ...l, notes: note, updatedAt: nowIso() } : l))
-      )
+      setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, notes: note, updatedAt: nowIso() } : l)))
       logActivity(id, "note-added", "Note updated")
     },
     [setLeads, logActivity]
@@ -199,28 +195,80 @@ export function useLeads() {
     [logActivity]
   )
 
-  return {
-    leads,
-    activities,
-    addLead,
-    updateLead,
-    setStage,
-    setStatus,
-    setScore,
-    setCallPermission,
-    setCallStatus,
-    setMeetingStatus,
-    assignTo,
-    addNote,
-    addTag,
-    removeTag,
-    activitiesForLead,
-    setPriority,
-    setNextFollowUp,
-    sendToHumanSales,
-    markContacted,
-    markWon,
-    markLost,
-    markSheetSynced,
+  const value = React.useMemo<LeadsContextValue>(
+    () => ({
+      leads,
+      activities,
+      isLoading: false,
+      error: null,
+      addLead,
+      updateLead,
+      setStage,
+      setStatus,
+      setScore,
+      setCallPermission,
+      setCallStatus,
+      setMeetingStatus,
+      assignTo,
+      addNote,
+      addTag,
+      removeTag,
+      activitiesForLead,
+      setPriority,
+      setNextFollowUp,
+      sendToHumanSales,
+      markContacted,
+      markWon,
+      markLost,
+      markSheetSynced,
+      refetch: () => {},
+    }),
+    [
+      leads,
+      activities,
+      addLead,
+      updateLead,
+      setStage,
+      setStatus,
+      setScore,
+      setCallPermission,
+      setCallStatus,
+      setMeetingStatus,
+      assignTo,
+      addNote,
+      addTag,
+      removeTag,
+      activitiesForLead,
+      setPriority,
+      setNextFollowUp,
+      sendToHumanSales,
+      markContacted,
+      markWon,
+      markLost,
+      markSheetSynced,
+    ]
+  )
+
+  return <LeadsContext.Provider value={value}>{children}</LeadsContext.Provider>
+}
+
+function DemoLeadsProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <leadsStore.Provider>
+      <activitiesStore.Provider>
+        <DemoLeadsBridge>{children}</DemoLeadsBridge>
+      </activitiesStore.Provider>
+    </leadsStore.Provider>
+  )
+}
+
+/** Picks the in-memory demo store or the real database-backed store. Kept
+ * separate from DEMO_MODE (which governs WhatsApp/calling/etc. simulation)
+ * — a workspace can run CRM_MODE=database while other integrations stay
+ * simulated. */
+export function LeadsProvider({ children, crmMode = "demo" }: { children: React.ReactNode; crmMode?: "demo" | "database" }) {
+  if (crmMode === "database") {
+    return <DatabaseLeadsProvider>{children}</DatabaseLeadsProvider>
   }
+  return <DemoLeadsProvider>{children}</DemoLeadsProvider>
 }

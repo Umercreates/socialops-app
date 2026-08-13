@@ -16,8 +16,10 @@ import { CallAgentProvider } from "./call-agent-store"
 import { SheetsProvider } from "./sheets-store"
 
 /** Single mount point for every in-memory demo store, so any page under
- * `/dashboard` can read/mutate shared mock state without prop drilling. */
-export function MockDataProvider({ children }: { children: ReactNode }) {
+ * `/dashboard` can read/mutate shared mock state without prop drilling.
+ * `crmMode` swaps only the Leads store between the demo in-memory version
+ * and the real database-backed one — every other store here stays demo. */
+export function MockDataProvider({ children, crmMode = "demo" }: { children: ReactNode; crmMode?: "demo" | "database" }) {
   return (
     <AccountsProvider>
       <PostsProvider>
@@ -27,7 +29,7 @@ export function MockDataProvider({ children }: { children: ReactNode }) {
               <KnowledgeProvider>
                 <SettingsProvider>
                   <WhatsAppProvider>
-                    <LeadsProvider>
+                    <LeadsProvider crmMode={crmMode}>
                       <CallsProvider>
                         <MeetingsProvider>
                           <CallAgentProvider>

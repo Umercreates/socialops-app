@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth/auth-context";
@@ -19,14 +20,20 @@ export const metadata: Metadata = {
   description: "Manage every social account, post, and conversation from one workspace.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Forces this read to happen at request time rather than being inlined at
+  // build time, so flipping AUTH_MODE in production takes effect on the
+  // next request/restart without requiring a rebuild.
+  await connection();
+  const authMode = process.env.AUTH_MODE === "production" ? "production" : "mock";
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <AuthProvider>
+        <AuthProvider authMode={authMode}>
           <TooltipProvider>{children}</TooltipProvider>
         </AuthProvider>
       </body>

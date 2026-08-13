@@ -2,19 +2,44 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ArrowLeft, Loader2, CircleAlert, MailCheck } from "lucide-react"
+import { ArrowLeft, Loader2, CircleAlert, MailCheck, Mail } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { mockRequestPasswordReset } from "@/lib/auth/mock-auth"
+import { useAuth } from "@/lib/auth/auth-context"
 
 export function ForgotPasswordForm() {
+  const { authMode } = useAuth()
   const [email, setEmail] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [isSent, setIsSent] = React.useState(false)
+
+  // No email provider exists yet (Phase 3+) — never fake a "sent" success
+  // for a real production account, only for the mock demo flow.
+  if (authMode === "production") {
+    return (
+      <div className="flex flex-col items-center gap-4 text-center">
+        <div className="flex size-12 items-center justify-center rounded-2xl bg-muted">
+          <Mail className="size-5.5 text-muted-foreground" strokeWidth={1.75} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Password recovery isn&apos;t set up yet</h1>
+          <p className="text-sm text-muted-foreground text-balance">
+            Self-service email reset hasn&apos;t been configured for this workspace yet. Contact your workspace owner
+            to have your password reset directly.
+          </p>
+        </div>
+        <Button render={<Link href="/login" />} nativeButton={false} variant="outline" className="mt-2 w-full">
+          <ArrowLeft />
+          Back to sign in
+        </Button>
+      </div>
+    )
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
