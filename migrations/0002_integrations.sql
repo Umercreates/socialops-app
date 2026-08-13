@@ -1,5 +1,5 @@
 -- Phase 3: APIs & Integrations Control Center + WhatsApp Cloud API pipeline.
--- Additive only — never touches Phase 2 tables (users/workspaces/sessions/
+-- Additive only - never touches Phase 2 tables (users/workspaces/sessions/
 -- leads/lead_activities). Every table here is workspace-scoped.
 
 CREATE TABLE IF NOT EXISTS socialops.integration_connections (
@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS socialops.integration_connections (
   status                TEXT NOT NULL DEFAULT 'not_configured'
                           CHECK (status IN ('not_configured', 'configured', 'connected', 'error', 'expired', 'disabled')),
   display_name          TEXT,
-  -- Non-secret configuration (e.g. WABA ID, phone number ID) — plain JSON.
+  -- Non-secret configuration (e.g. WABA ID, phone number ID) - plain JSON.
   config                JSONB NOT NULL DEFAULT '{}',
   -- Secret fields only, AES-256-GCM encrypted per record (see
   -- src/lib/integrations/crypto.ts). Shape: { [fieldKey]: base64EncryptedBlob }.
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS socialops.whatsapp_conversations (
   contact_name          TEXT,
   lead_id               UUID REFERENCES socialops.leads(id) ON DELETE SET NULL,
   status                TEXT NOT NULL DEFAULT 'bot' CHECK (status IN ('bot', 'escalated', 'human', 'closed')),
-  -- Bounded chatbot state machine snapshot (step/collected fields) — small,
+  -- Bounded chatbot state machine snapshot (step/collected fields) - small,
   -- structured, never a full raw transcript dump.
   bot_state             JSONB NOT NULL DEFAULT '{}',
   last_message_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS socialops.whatsapp_messages (
   id                    UUID PRIMARY KEY,
   workspace_id          UUID NOT NULL REFERENCES socialops.workspaces(id) ON DELETE CASCADE,
   conversation_id       UUID NOT NULL REFERENCES socialops.whatsapp_conversations(id) ON DELETE CASCADE,
-  -- Meta's wamid — the idempotency key for inbound webhook deliveries.
+  -- Meta's wamid - the idempotency key for inbound webhook deliveries.
   -- Null for outbound messages sent before the provider assigns one.
   external_message_id   TEXT,
   direction             TEXT NOT NULL CHECK (direction IN ('inbound', 'outbound')),
