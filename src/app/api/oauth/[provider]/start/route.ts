@@ -4,6 +4,7 @@ import { isProviderId, PROVIDER_REGISTRY } from "@/lib/integrations/providers"
 import { getConnection } from "@/lib/integrations/repository"
 import { resolveCredentialValue } from "@/lib/integrations/service"
 import { startOAuthFlow } from "@/lib/integrations/oauth"
+import { getAppOrigin } from "@/lib/app-url"
 import { apiError } from "@/lib/api/errors"
 
 /** Begins an OAuth connection: redirects the browser to the provider's
@@ -35,7 +36,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ provider: s
       )
     }
 
-    const origin = new URL(request.url).origin
+    const origin = getAppOrigin(request)
     const callbackUrl = `${origin}/api/oauth/${provider}/callback`
 
     const { authorizationUrl } = await startOAuthFlow(

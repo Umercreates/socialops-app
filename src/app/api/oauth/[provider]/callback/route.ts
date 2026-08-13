@@ -3,6 +3,7 @@ import { isProviderId } from "@/lib/integrations/providers"
 import { getConnection, recordAuditEvent } from "@/lib/integrations/repository"
 import { resolveCredentialValue, storeOAuthTokens } from "@/lib/integrations/service"
 import { consumeOAuthState, exchangeCodeForToken } from "@/lib/integrations/oauth"
+import { getAppOrigin } from "@/lib/app-url"
 import { apiError } from "@/lib/api/errors"
 
 /**
@@ -16,7 +17,8 @@ import { apiError } from "@/lib/api/errors"
 export async function GET(request: Request, ctx: { params: Promise<{ provider: string }> }) {
   const { provider } = await ctx.params
   const url = new URL(request.url)
-  const redirectBase = `${url.origin}/dashboard/integrations`
+  const origin = getAppOrigin(request)
+  const redirectBase = `${origin}/dashboard/integrations`
 
   try {
     if (!isProviderId(provider)) {
@@ -47,7 +49,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ provider: s
       return NextResponse.redirect(`${redirectBase}?oauth=not_configured&provider=${provider}`)
     }
 
-    const callbackUrl = `${url.origin}/api/oauth/${provider}/callback`
+    const callbackUrl = `${origin}/api/oauth/${provider}/callback`
     const exchange = await exchangeCodeForToken(provider, code, clientId, clientSecret, callbackUrl, consumed.codeVerifier)
 
     if (!exchange.ok || !exchange.accessToken) {
