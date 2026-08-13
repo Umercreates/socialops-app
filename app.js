@@ -14,6 +14,12 @@
  *
  * This file assumes a completed `next build` (a `.next/` production build)
  * already exists in this directory — it does not build the app itself.
+ *
+ * `turbopack: false` is required here: Turbopack needs a platform-specific
+ * native binary, and shared hosts with an older glibc than the binary
+ * requires can't load it — Next falls back to WASM bindings, which
+ * explicitly don't support Turbopack and crash on `prepare()`. The build
+ * itself also runs with `next build --webpack` (see package.json) to match.
  */
 
 const { createServer } = require("node:http");
@@ -23,7 +29,7 @@ const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
 const hostname = process.env.HOSTNAME || undefined; // undefined = bind all interfaces, matches typical Passenger setups
 
-const app = next({ dev, dir: __dirname, hostname, port });
+const app = next({ dev, dir: __dirname, hostname, port, turbopack: false });
 const handleRequest = app.getRequestHandler();
 
 app
