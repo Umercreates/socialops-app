@@ -20,14 +20,23 @@
  * requires can't load it — Next falls back to WASM bindings, which
  * explicitly don't support Turbopack and crash on `prepare()`. The build
  * itself also runs with `next build --webpack` (see package.json) to match.
+ *
+ * `dev` is hardcoded false, not derived from NODE_ENV: this file has
+ * exactly one job — serve the pre-built `.next` in production — so it must
+ * never silently fall into dev mode (which needs a working bundler at
+ * request time) just because a host's stored NODE_ENV value isn't the
+ * exact string "production" (e.g. a differently-cased value from a
+ * hosting panel's own env var UI).
  */
 
 const { createServer } = require("node:http");
 const next = require("next");
 
-const dev = process.env.NODE_ENV !== "production";
+const dev = false;
 const port = parseInt(process.env.PORT || "3000", 10);
 const hostname = process.env.HOSTNAME || undefined; // undefined = bind all interfaces, matches typical Passenger setups
+
+console.log(`> Booting with NODE_ENV=${JSON.stringify(process.env.NODE_ENV)} PORT=${port}`);
 
 const app = next({ dev, dir: __dirname, hostname, port, turbopack: false });
 const handleRequest = app.getRequestHandler();
