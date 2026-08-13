@@ -1,14 +1,14 @@
 import type { Integration, TeamMember } from "@/types"
 
 export const TEAM_MEMBERS: TeamMember[] = [
-  { id: "team_1", name: "Maya Reyes", email: "maya@easyland.co", role: "admin", status: "active" },
-  { id: "team_2", name: "Priya Anand", email: "priya@easyland.co", role: "content-creator", status: "active" },
-  { id: "team_3", name: "Jordan Blake", email: "jordan@easyland.co", role: "manager", status: "active" },
-  { id: "team_4", name: "Sam Whitfield", email: "sam@easyland.co", role: "support-agent", status: "invited" },
+  { id: "team_1", name: "Maya Reyes", email: "maya@easylife.co", role: "admin", status: "active" },
+  { id: "team_2", name: "Priya Anand", email: "priya@easylife.co", role: "content-creator", status: "active" },
+  { id: "team_3", name: "Jordan Blake", email: "jordan@easylife.co", role: "manager", status: "active" },
+  { id: "team_4", name: "Sam Whitfield", email: "sam@easylife.co", role: "support-agent", status: "invited" },
 ]
 
 export const INTEGRATIONS: Integration[] = [
-  { id: "int_zapier", name: "Zapier", description: "Trigger workflows in 6,000+ apps from Easyland events.", status: "not-connected", category: "automation" },
+  { id: "int_zapier", name: "Zapier", description: "Trigger workflows in 6,000+ apps from EasyLife events.", status: "not-connected", category: "automation" },
   { id: "int_make", name: "Make", description: "Build visual automations across your stack.", status: "coming-soon", category: "automation" },
   { id: "int_n8n", name: "n8n", description: "Self-hosted workflow automation.", status: "coming-soon", category: "automation" },
   { id: "int_webhooks", name: "Webhooks", description: "Send raw event payloads to any endpoint.", status: "not-connected", category: "automation" },

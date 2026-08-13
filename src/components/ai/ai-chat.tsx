@@ -1,13 +1,29 @@
 "use client"
 
 import * as React from "react"
-import { Bot, Send, Loader2, Sparkles, Info } from "lucide-react"
+import { Bot, Send, Loader2, Sparkles, Info, Cpu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { AI_CAPABILITIES } from "@/components/ai/ai-capabilities"
-import { getMockAiResponse } from "@/lib/services/ai-service"
 import type { AiCapability, AiChatMessage } from "@/types"
 import { cn } from "@/lib/utils"
+
+/** Calls the server route, which tries real Gemini first and only falls
+ * back to the local template if Gemini is unavailable — the route always
+ * resolves, it never throws, so the UI never has to render an error state. */
+async function getAiResponse(capability: AiCapability, input: string): Promise<{ text: string; source: "gemini" | "simulated" }> {
+  try {
+    const res = await fetch("/api/ai/assistant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ capability, input }),
+    })
+    const body = await res.json()
+    return { text: body.text as string, source: (body.source as "gemini" | "simulated") ?? "simulated" }
+  } catch {
+    return { text: "Sorry, something went wrong reaching the AI Assistant — please try again.", source: "simulated" }
+  }
+}
 
 function initialsAvatar() {
   return (
@@ -46,8 +62,8 @@ export function AiChat() {
     setInput("")
     setIsThinking(true)
 
-    const reply = await getMockAiResponse(activeCapability, text)
-    setMessages((prev) => [...prev, { id: `a_${Date.now()}`, role: "assistant", content: reply, createdAt: new Date().toISOString() }])
+    const { text: reply, source } = await getAiResponse(activeCapability, text)
+    setMessages((prev) => [...prev, { id: `a_${Date.now()}`, role: "assistant", content: reply, createdAt: new Date().toISOString(), source }])
     setIsThinking(false)
   }
 
@@ -76,10 +92,10 @@ export function AiChat() {
         ))}
       </div>
 
-      <div className="flex h-[36rem] flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+      <div className="flex h-[36rem] flex-col overflow-hidden rounded-xl bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10">
         <div className="flex items-center gap-2 border-b border-border px-3.5 py-2.5 text-xs text-muted-foreground">
           <Info className="size-3.5 shrink-0" />
-          Simulated responses for this demo — not connected to a real AI provider.
+          Powered by Gemini when available — falls back to a local demo response if the AI provider is unreachable.
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
@@ -87,13 +103,21 @@ export function AiChat() {
             {messages.map((message) => (
               <div key={message.id} className={cn("flex gap-2.5", message.role === "user" && "flex-row-reverse")}>
                 {message.role === "assistant" && initialsAvatar()}
-                <div
-                  className={cn(
-                    "max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap",
-                    message.role === "user" ? "rounded-br-sm bg-brand text-brand-foreground" : "rounded-bl-sm bg-muted text-foreground"
+                <div className={cn("flex max-w-[80%] flex-col gap-1", message.role === "user" && "items-end")}>
+                  <div
+                    className={cn(
+                      "rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap",
+                      message.role === "user" ? "rounded-br-sm bg-brand text-brand-foreground" : "rounded-bl-sm bg-muted text-foreground"
+                    )}
+                  >
+                    {message.content}
+                  </div>
+                  {message.role === "assistant" && message.source && (
+                    <span className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground/70">
+                      <Cpu className="size-2.5" />
+                      {message.source === "gemini" ? "Gemini" : "Simulated (demo fallback)"}
+                    </span>
                   )}
-                >
-                  {message.content}
                 </div>
               </div>
             ))}

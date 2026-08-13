@@ -34,7 +34,7 @@ export function WeekView({ weekAnchor, posts, today, onSelectPost }: WeekViewPro
         const dayPosts = (postsByDate.get(dateKey(day)) ?? []).sort((a, b) => (timeFor(a) ?? "").localeCompare(timeFor(b) ?? ""))
         const isToday = isSameDay(day, today)
         return (
-          <div key={dateKey(day)} className="flex flex-col gap-2 rounded-xl bg-card p-2.5 ring-1 ring-foreground/10">
+          <div key={dateKey(day)} className="flex flex-col gap-2 rounded-xl bg-card p-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10">
             <div className="flex items-center justify-between">
               <span className={cn("text-xs font-medium", isToday ? "text-brand" : "text-muted-foreground")}>
                 {formatDayLabel(day)}

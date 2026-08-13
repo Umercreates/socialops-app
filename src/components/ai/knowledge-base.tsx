@@ -79,7 +79,7 @@ export function KnowledgeBase() {
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-foreground">{sources.length} sources</span>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger render={<Button size="sm" />} nativeButton={false}>
+          <DialogTrigger render={<Button size="sm" />}>
             <Upload />
             Upload knowledge
           </DialogTrigger>
@@ -118,7 +118,7 @@ export function KnowledgeBase() {
         </Dialog>
       </div>
 
-      <div className="flex flex-col divide-y divide-border rounded-xl bg-card ring-1 ring-foreground/10">
+      <div className="flex flex-col divide-y divide-border rounded-xl bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10">
         {sources.map((source) => {
           const Icon = TYPE_ICON[source.type]
           return (

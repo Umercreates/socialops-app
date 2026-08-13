@@ -7,7 +7,7 @@ export const ACTIVITY_FEED: ActivityItem[] = [
     status: "success",
     platform: "instagram",
     title: "Instagram post published",
-    description: "“Fall studio lookbook teaser” went live to @easyland.",
+    description: "“Fall studio lookbook teaser” went live to @easylife.",
     timestamp: "2026-08-09T13:42:00Z",
   },
   {
@@ -42,7 +42,7 @@ export const ACTIVITY_FEED: ActivityItem[] = [
     status: "success",
     platform: "tiktok",
     title: "Scheduled TikTok video published",
-    description: "“Studio tour: 60 seconds” posted to @easyland.",
+    description: "“Studio tour: 60 seconds” posted to @easylife.",
     timestamp: "2026-08-09T08:30:00Z",
   },
   {
@@ -60,7 +60,7 @@ export const ACTIVITY_FEED: ActivityItem[] = [
     status: "success",
     platform: "linkedin",
     title: "LinkedIn account connected",
-    description: "Easyland LinkedIn page was linked to this workspace.",
+    description: "EasyLife LinkedIn page was linked to this workspace.",
     timestamp: "2026-08-08T17:47:00Z",
   },
   {

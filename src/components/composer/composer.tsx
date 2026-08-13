@@ -186,7 +186,7 @@ export function Composer() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="flex flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 animate-in fade-in-0 slide-in-from-bottom-2 duration-500 ease-out">
       <div className="flex flex-col gap-1">
         <h2 className="text-xl font-semibold tracking-tight text-foreground">Create post</h2>
         <p className="text-sm text-muted-foreground">Draft once, tailor per platform, then schedule or publish.</p>

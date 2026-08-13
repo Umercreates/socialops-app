@@ -37,7 +37,7 @@ export const NOTIFICATIONS: Notification[] = [
     id: "notif_5",
     type: "account-warning",
     title: "X connection needs attention",
-    description: "Reconnect @northstarhq to keep publishing on schedule.",
+    description: "Reconnect @easylife to keep publishing on schedule.",
     createdAt: "2026-08-08T09:12:00Z",
     read: true,
   },

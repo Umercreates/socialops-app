@@ -7,6 +7,7 @@ import { QrLinkCard } from "@/components/whatsapp/qr-link-card"
 import { ChatbotDemo } from "@/components/whatsapp/chatbot-demo"
 import { LeadInboxList } from "@/components/whatsapp/lead-inbox-list"
 import { WhatsAppIcon } from "@/components/whatsapp/whatsapp-icon"
+import { AnimatedNumber } from "@/components/dashboard/animated-number"
 import { LEAD_STAGE_ORDER } from "@/lib/lead-status"
 import { formatCompactNumber } from "@/lib/format"
 import { useLeads } from "@/lib/store/leads-store"
@@ -18,29 +19,33 @@ export function WhatsAppPageContent() {
   const qualifiedLeads = whatsappLeads.filter((l) => LEAD_STAGE_ORDER.indexOf(l.stage) >= qualifiedIndex)
 
   return (
-    <div className="flex flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="flex flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8 animate-in fade-in-0 slide-in-from-bottom-2 duration-500 ease-out">
       <div className="flex flex-col gap-1">
         <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-foreground">
           <WhatsAppIcon size={20} />
           WhatsApp
         </h2>
         <p className="text-sm text-muted-foreground">
-          One Easyland WhatsApp Business number — from QR scan to AI-qualified lead, all in one place.
+          One EasyLife WhatsApp Business number — from QR scan to AI-qualified lead, all in one place.
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:max-w-sm">
-        <div className="flex items-center gap-2.5 rounded-xl bg-card px-3.5 py-3 ring-1 ring-foreground/10">
+        <div className="flex items-center gap-2.5 rounded-xl bg-card px-3.5 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10 transition-shadow duration-200 hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]">
           <MessageCircle className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
           <div className="flex min-w-0 flex-col">
-            <span className="text-base font-semibold text-foreground">{formatCompactNumber(whatsappLeads.length)}</span>
+            <span className="text-base font-semibold tabular-nums text-foreground">
+              <AnimatedNumber value={whatsappLeads.length} format={formatCompactNumber} />
+            </span>
             <span className="truncate text-xs text-muted-foreground">Leads received</span>
           </div>
         </div>
-        <div className="flex items-center gap-2.5 rounded-xl bg-card px-3.5 py-3 ring-1 ring-foreground/10">
+        <div className="flex items-center gap-2.5 rounded-xl bg-card px-3.5 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10 transition-shadow duration-200 hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]">
           <Target className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
           <div className="flex min-w-0 flex-col">
-            <span className="text-base font-semibold text-foreground">{formatCompactNumber(qualifiedLeads.length)}</span>
+            <span className="text-base font-semibold tabular-nums text-foreground">
+              <AnimatedNumber value={qualifiedLeads.length} format={formatCompactNumber} />
+            </span>
             <span className="truncate text-xs text-muted-foreground">Qualified leads</span>
           </div>
         </div>

@@ -44,7 +44,7 @@ export function QrLinkCard() {
       <CardHeader className="px-0">
         <CardTitle className="text-[15px]">WhatsApp click-to-chat link + QR</CardTitle>
         <p className="text-xs text-muted-foreground">
-          Real, working <code className="rounded bg-muted px-1 py-0.5">wa.me</code> links — no API required. Always opens Easyland&apos;s WhatsApp.
+          Real, working <code className="rounded bg-muted px-1 py-0.5">wa.me</code> links — no API required. Always opens EasyLife&apos;s WhatsApp.
         </p>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-6 px-0 lg:grid-cols-[1fr_16rem]">

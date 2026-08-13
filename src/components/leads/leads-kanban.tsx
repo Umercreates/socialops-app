@@ -24,7 +24,7 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: (leadId: string) => vo
   const nextStage = stageIndex >= 0 && stageIndex < LEAD_STAGE_ORDER.length - 2 ? LEAD_STAGE_ORDER[stageIndex + 1] : null
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg bg-card p-3 ring-1 ring-foreground/10">
+    <div className="group flex flex-col gap-2 rounded-lg bg-card p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_16px_rgba(0,0,0,0.07)] hover:ring-foreground/15">
       <button type="button" onClick={() => onOpen(lead.id)} className="flex flex-col gap-1.5 text-left">
         <div className="flex items-start justify-between gap-2">
           <span className="text-sm font-medium text-foreground">{lead.name}</span>
@@ -44,10 +44,10 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: (leadId: string) => vo
         <button
           type="button"
           onClick={() => setStage(lead.id, nextStage)}
-          className="flex items-center justify-center gap-1 self-start rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="group/movebtn flex items-center justify-center gap-1 self-start rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors duration-150 hover:bg-brand/10 hover:text-brand"
         >
           Move to {LEAD_STAGE_LABEL[nextStage]}
-          <ArrowRight className="size-3" />
+          <ArrowRight className="size-3 transition-transform group-hover/movebtn:translate-x-0.5" />
         </button>
       )}
     </div>

@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { AccountsPageContent } from "@/components/accounts/accounts-page-content"
 
-export const metadata: Metadata = { title: "Social Accounts — Easyland" }
+export const metadata: Metadata = { title: "Social Accounts — EasyLife" }
 
 export default function SocialAccountsPage() {
   return <AccountsPageContent />

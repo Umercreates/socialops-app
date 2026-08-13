@@ -120,7 +120,7 @@ export function ConnectionCard() {
               if (!open) setStep("form")
             }}
           >
-            <DialogTrigger render={<Button size="sm" />} nativeButton={false}>
+            <DialogTrigger render={<Button size="sm" />}>
               <WhatsAppIcon size={14} />
               Connect
             </DialogTrigger>

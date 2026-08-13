@@ -61,7 +61,7 @@ export const CALLS: Call[] = [
     endedAt: "2026-08-09T13:14:00Z",
     durationSeconds: 540,
     transcript: [
-      { id: "t1", speaker: "agent", text: "Hi Priya, this is Aria from Easyland — thanks for your interest, got a couple minutes?", timestamp: "2026-08-09T13:05:10Z" },
+      { id: "t1", speaker: "agent", text: "Hi Priya, this is Aria from EasyLife — thanks for your interest, got a couple minutes?", timestamp: "2026-08-09T13:05:10Z" },
       { id: "t2", speaker: "lead", text: "Yes, go ahead!", timestamp: "2026-08-09T13:05:20Z" },
       { id: "t3", speaker: "agent", text: "Great — I saw you're looking for a half-day brand photoshoot. What's driving that right now?", timestamp: "2026-08-09T13:05:35Z" },
       { id: "t4", speaker: "lead", text: "My website and LinkedIn both use photos from three years ago, it's overdue.", timestamp: "2026-08-09T13:06:00Z" },
@@ -90,7 +90,7 @@ export const CALLS: Call[] = [
     endedAt: "2026-08-08T13:24:00Z",
     durationSeconds: 840,
     transcript: [
-      { id: "t1", speaker: "agent", text: "Hi Layla, this is Aria calling from Easyland — thanks for reaching out about a brand refresh.", timestamp: "2026-08-08T13:10:10Z" },
+      { id: "t1", speaker: "agent", text: "Hi Layla, this is Aria calling from EasyLife — thanks for reaching out about a brand refresh.", timestamp: "2026-08-08T13:10:10Z" },
       { id: "t2", speaker: "lead", text: "Yes! We really need a new look, our current branding doesn't match our work anymore.", timestamp: "2026-08-08T13:10:40Z" },
       { id: "t3", speaker: "agent", text: "Understood — and what's the timeline you're hoping for?", timestamp: "2026-08-08T13:11:10Z" },
       { id: "t4", speaker: "lead", text: "As soon as possible, ideally we'd start this month.", timestamp: "2026-08-08T13:11:30Z" },
@@ -119,7 +119,7 @@ export const CALLS: Call[] = [
     endedAt: "2026-08-02T10:39:00Z",
     durationSeconds: 240,
     transcript: [
-      { id: "t1", speaker: "agent", text: "Hi Noah, this is Aria from Easyland, thanks for your interest — got a minute?", timestamp: "2026-08-02T10:35:10Z" },
+      { id: "t1", speaker: "agent", text: "Hi Noah, this is Aria from EasyLife, thanks for your interest — got a minute?", timestamp: "2026-08-02T10:35:10Z" },
       { id: "t2", speaker: "lead", text: "Sure, but I should say upfront our budget is pretty limited.", timestamp: "2026-08-02T10:35:30Z" },
       { id: "t3", speaker: "agent", text: "No problem — what range are you working with?", timestamp: "2026-08-02T10:36:00Z" },
       { id: "t4", speaker: "lead", text: "Probably under $300 a month, honestly.", timestamp: "2026-08-02T10:36:20Z" },

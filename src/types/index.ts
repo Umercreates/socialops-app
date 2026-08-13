@@ -1,5 +1,5 @@
 /**
- * Shared domain types for the Easyland dashboard.
+ * Shared domain types for the EasyLife dashboard.
  *
  * These model the multi-tenant shape of the product:
  * User -> Workspace -> Social Accounts -> Posts / Conversations / Comments / Automations / Analytics.
@@ -337,6 +337,9 @@ export interface AiChatMessage {
   role: "user" | "assistant"
   content: string
   createdAt: string
+  /** Only set on assistant messages — whether this reply came from the real
+   * Gemini API or the local template fallback (e.g. Gemini unreachable). */
+  source?: "gemini" | "simulated"
 }
 
 export type TeamRole = "admin" | "manager" | "content-creator" | "support-agent"
@@ -368,7 +371,7 @@ export type WhatsAppConnectionStatus = "connected" | "disconnected" | "expired" 
 export interface WhatsAppAccount {
   id: string
   businessName: string
-  /** The single Easyland WhatsApp Business number. Display format, e.g. "+92 300 1234567". */
+  /** The single EasyLife WhatsApp Business number. Display format, e.g. "+92 300 1234567". */
   number: string
   status: WhatsAppConnectionStatus
   connectedAt: string | null

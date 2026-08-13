@@ -2,7 +2,7 @@ import type { CallAgentConfig, UsageSummary } from "@/types"
 
 export const CALL_AGENT_CONFIG: CallAgentConfig = {
   agentName: "Aria",
-  companyName: "Easyland",
+  companyName: "EasyLife",
   language: "Urdu + English (mixed)",
   voice: "Warm & professional (female)",
   greeting: "Assalam-o-Alaikum, main {{agentName}} bol rahi hoon {{companyName}} ki taraf se — thanks for your interest, do you have a couple of minutes to talk?",

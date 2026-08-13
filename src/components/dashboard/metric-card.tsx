@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { TrendingUp, TrendingDown, type LucideIcon } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { formatSigned, formatSignedCompact } from "@/lib/format"
@@ -6,7 +7,7 @@ import { cn } from "@/lib/utils"
 interface MetricCardProps {
   icon: LucideIcon
   label: string
-  value: string
+  value: ReactNode
   delta?: {
     value: number
     suffix?: string
@@ -29,7 +30,7 @@ export function MetricCard({ icon: Icon, label, value, delta, caption }: MetricC
         {delta && <DeltaChip {...delta} />}
       </div>
       <div className="flex flex-col gap-0.5 px-0.5">
-        <span className="text-2xl font-semibold text-foreground">{value}</span>
+        <span className="text-2xl font-semibold tabular-nums text-foreground">{value}</span>
         <span className="text-sm text-muted-foreground">{label}</span>
       </div>
       {caption && <span className="px-0.5 text-xs text-muted-foreground/80">{caption}</span>}

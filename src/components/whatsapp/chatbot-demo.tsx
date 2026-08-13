@@ -28,7 +28,7 @@ interface ChatMessage {
   text: string
 }
 
-const GREETING = "Hi! Thanks for reaching out to Easyland 👋 What can we help you with — website, app, marketing, branding, or something else?"
+const GREETING = "Hi! Thanks for reaching out to EasyLife 👋 What can we help you with — website, app, marketing, branding, or something else?"
 const QUICK_REPLIES = ["I need a website", "Looking for digital marketing help", "Just checking prices"]
 
 function initialMessages(): ChatMessage[] {

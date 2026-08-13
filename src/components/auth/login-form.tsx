@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Eye, EyeOff, Loader2, CircleAlert } from "lucide-react"
+import { Eye, EyeOff, Loader2, CircleAlert, Sparkles } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -52,14 +52,17 @@ export function LoginForm() {
         <p className="text-sm text-muted-foreground">Sign in to manage every account from one workspace.</p>
       </div>
 
-      <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
-        Demo credentials are pre-filled — use password{" "}
-        <span className="font-mono font-medium text-foreground">{DEMO_CREDENTIALS.password}</span>
+      <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
+        <Sparkles className="mt-0.5 size-3.5 shrink-0 text-brand" strokeWidth={1.75} />
+        <span>
+          Demo credentials are pre-filled — use password{" "}
+          <span className="font-mono font-medium text-foreground">{DEMO_CREDENTIALS.password}</span>
+        </span>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
         {error && (
-          <Alert variant="destructive">
+          <Alert variant="destructive" className="animate-in fade-in-0 slide-in-from-top-1 duration-200">
             <CircleAlert />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
@@ -132,7 +135,7 @@ export function LoginForm() {
       </form>
 
       <p className="text-center text-sm text-muted-foreground">
-        New to Easyland?{" "}
+        New to EasyLife?{" "}
         <Link href="#" className="font-medium text-brand hover:underline">
           Talk to sales
         </Link>

@@ -1,11 +1,11 @@
 import type { WhatsAppAccount } from "@/types"
 
-/** Easyland runs a single WhatsApp Business number — no multi-number/department
+/** EasyLife runs a single WhatsApp Business number — no multi-number/department
  * routing. The number stays configurable (Settings → WhatsApp) but every
  * social lead and QR/link always resolves to this one account. */
 export const WHATSAPP_ACCOUNT: WhatsAppAccount = {
   id: "wa_account_1",
-  businessName: "Easyland",
+  businessName: "EasyLife",
   number: "+92 300 1234567",
   status: "connected",
   connectedAt: "2026-06-15T09:00:00Z",

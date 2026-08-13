@@ -44,7 +44,7 @@ export function CallQueueTable({ onCallNow }: { onCallNow: (lead: Lead) => void 
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl bg-card ring-1 ring-foreground/10">
+    <div className="overflow-x-auto rounded-xl bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10">
       <table className="w-full min-w-[960px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs text-muted-foreground">

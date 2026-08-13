@@ -115,7 +115,7 @@ export function AutomationBuilderDialog() {
         if (!next) reset()
       }}
     >
-      <DialogTrigger render={<Button />} nativeButton={false}>
+      <DialogTrigger render={<Button />}>
         <Sparkles />
         Create automation
       </DialogTrigger>

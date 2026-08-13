@@ -13,7 +13,7 @@ import { CURRENT_USER } from "@/lib/data/workspace"
  */
 
 export const DEMO_CREDENTIALS = {
-  email: "maya@easyland.co",
+  email: "maya@easylife.co",
   password: "demo1234",
 }
 

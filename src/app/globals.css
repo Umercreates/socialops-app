@@ -70,8 +70,8 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: #2a6fd6;
-  --primary-foreground: #ffffff;
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -81,7 +81,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: #2a6fd6;
+  --ring: var(--brand);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -90,16 +90,20 @@
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: #2a6fd6;
-  --sidebar-primary-foreground: #ffffff;
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: var(--brand-foreground);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: #2a6fd6;
+  --sidebar-ring: var(--brand);
 
-  /* Brand accent + status + chart series (validated CVD-safe palette) */
-  --brand: #2a6fd6;
+  /* Brand accent + status + chart series (validated CVD-safe palette).
+     Brand is a restrained emerald — deliberately desaturated so it reads
+     as "premium fintech" rather than neon; it is the only accent hue and
+     is reserved for active/selected states and primary CTAs. */
+  --brand: #059669;
   --brand-foreground: #ffffff;
+  --brand-glow: 5 150 105;
   --success: #0ca30c;
   --success-foreground: #ffffff;
   --warning: #fab219;
@@ -116,8 +120,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: #3987e5;
-  --primary-foreground: #ffffff;
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -127,7 +131,7 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: #3987e5;
+  --ring: var(--brand);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -135,16 +139,19 @@
   --chart-5: oklch(0.269 0 0);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: #3987e5;
-  --sidebar-primary-foreground: #ffffff;
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: var(--brand-foreground);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: #3987e5;
+  --sidebar-ring: var(--brand);
 
-  /* Brand accent + status + chart series (validated CVD-safe palette, dark steps) */
-  --brand: #3987e5;
+  /* Brand accent + status + chart series (validated CVD-safe palette, dark steps).
+     Brand steps up to a brighter emerald so it still reads as saturated
+     against the dark surface without tipping into neon. */
+  --brand: #10b981;
   --brand-foreground: #ffffff;
+  --brand-glow: 16 185 129;
   --success: #0ca30c;
   --success-foreground: #ffffff;
   --warning: #fab219;
@@ -163,5 +170,19 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* Respect reduced-motion: collapse entrance/hover animations to an instant,
+   no-transform state instead of disabling them outright (so layout built on
+   an animation completing, e.g. a fill bar, still reaches its end state). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

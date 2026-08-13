@@ -6,7 +6,7 @@ import { KnowledgeBase } from "@/components/ai/knowledge-base"
 
 export function AiAssistantContent() {
   return (
-    <div className="flex flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="flex flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8 animate-in fade-in-0 slide-in-from-bottom-2 duration-500 ease-out">
       <div className="flex flex-col gap-1">
         <AiPageHeader />
         <p className="text-sm text-muted-foreground">Draft, brainstorm, and reply faster — plus manage what the assistant knows about your brand.</p>

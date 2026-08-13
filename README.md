@@ -1,4 +1,4 @@
-# Easyland — AI Social Media Sales & Automation Dashboard
+# EasyLife — AI Social Media Sales & Automation Dashboard
 
 An AI-powered Social Media Sales Operating System: one workspace that takes a lead from a
 social media comment or DM, through WhatsApp and AI qualification, to an AI-run discovery
@@ -24,7 +24,7 @@ can be connected later without reworking the UI.
 - AI Assistant with a chat interface and a Knowledge Base tab
 
 **AI sales pipeline (Social → WhatsApp → AI Call → Human Sales)**
-- **WhatsApp** — a single connected Easyland WhatsApp Business number, dynamic QR code /
+- **WhatsApp** — a single connected EasyLife WhatsApp Business number, dynamic QR code /
   click-to-chat link with a prefilled, variable-templated message
 - **"Send WhatsApp Link"** action in the Social Inbox — hands an interested DM off to
   WhatsApp while preserving full source attribution (platform, campaign, original post/DM)
@@ -120,7 +120,7 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000) — you'll land on `/login`.
 
 **Demo login** (mock auth, pre-filled on the login screen):
-- Email: `maya@easyland.co`
+- Email: `maya@easylife.co`
 - Password: `demo1234`
 
 ## Build

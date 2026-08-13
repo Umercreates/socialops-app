@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Easyland — Social Media Management",
+  title: "EasyLife — Social Media Management",
   description: "Manage every social account, post, and conversation from one workspace.",
 };
 

@@ -3,7 +3,7 @@ import { AuthShell } from "@/components/auth/auth-shell"
 import { LoginForm } from "@/components/auth/login-form"
 
 export const metadata: Metadata = {
-  title: "Sign in — Easyland",
+  title: "Sign in — EasyLife",
 }
 
 export default function LoginPage() {

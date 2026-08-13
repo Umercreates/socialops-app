@@ -59,7 +59,7 @@ export function TeamSettings() {
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-foreground">{members.length} team members</span>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger render={<Button size="sm" />} nativeButton={false}>
+          <DialogTrigger render={<Button size="sm" />}>
             <UserPlus />
             Invite member
           </DialogTrigger>

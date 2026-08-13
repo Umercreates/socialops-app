@@ -50,7 +50,7 @@ export function ListView({ posts, onSelectPost }: ListViewProps) {
       {Array.from(groups.entries()).map(([key, groupPosts]) => (
         <div key={key} className="flex flex-col gap-2">
           <span className="text-xs font-medium text-muted-foreground">{formatGroupLabel(key)}</span>
-          <div className="flex flex-col divide-y divide-border rounded-xl bg-card ring-1 ring-foreground/10">
+          <div className="flex flex-col divide-y divide-border rounded-xl bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10">
             {groupPosts.map((post) => (
               <button
                 key={post.id}

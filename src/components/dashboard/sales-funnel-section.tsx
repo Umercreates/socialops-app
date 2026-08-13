@@ -4,6 +4,7 @@ import * as React from "react"
 import { Users, MessagesSquare, PhoneCall, UserCheck2, Target, CalendarCheck2, Trophy } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SecondaryStatStrip, type SecondaryStat } from "@/components/dashboard/secondary-stat-strip"
+import { AnimatedNumber } from "@/components/dashboard/animated-number"
 import { formatCompactNumber } from "@/lib/format"
 import { LEAD_STAGE_ORDER } from "@/lib/lead-status"
 import { useLeads } from "@/lib/store/leads-store"
@@ -35,14 +36,14 @@ export function SalesFunnelSection({ totalFollowers }: { totalFollowers: number 
   const pct = (num: number, den: number) => (den === 0 ? 0 : Math.round((num / den) * 100))
 
   const stats: SecondaryStat[] = [
-    { icon: Users, label: "Social leads", value: formatCompactNumber(leads.length) },
-    { icon: MessagesSquare, label: "WhatsApp conversations", value: formatCompactNumber(whatsappLeads.length) },
-    { icon: Target, label: "Interested leads", value: formatCompactNumber(interestedLeads.length) },
-    { icon: Target, label: "Qualified leads", value: formatCompactNumber(qualifiedLeads.length) },
-    { icon: PhoneCall, label: "AI calls", value: formatCompactNumber(calls.length) },
-    { icon: UserCheck2, label: "Human handoffs", value: formatCompactNumber(humanHandoffs.length) },
-    { icon: CalendarCheck2, label: "Meetings booked", value: formatCompactNumber(meetings.length) },
-    { icon: Trophy, label: "Won customers", value: formatCompactNumber(customers.length) },
+    { icon: Users, label: "Social leads", value: <AnimatedNumber value={leads.length} format={formatCompactNumber} /> },
+    { icon: MessagesSquare, label: "WhatsApp conversations", value: <AnimatedNumber value={whatsappLeads.length} format={formatCompactNumber} /> },
+    { icon: Target, label: "Interested leads", value: <AnimatedNumber value={interestedLeads.length} format={formatCompactNumber} /> },
+    { icon: Target, label: "Qualified leads", value: <AnimatedNumber value={qualifiedLeads.length} format={formatCompactNumber} /> },
+    { icon: PhoneCall, label: "AI calls", value: <AnimatedNumber value={calls.length} format={formatCompactNumber} /> },
+    { icon: UserCheck2, label: "Human handoffs", value: <AnimatedNumber value={humanHandoffs.length} format={formatCompactNumber} /> },
+    { icon: CalendarCheck2, label: "Meetings booked", value: <AnimatedNumber value={meetings.length} format={formatCompactNumber} /> },
+    { icon: Trophy, label: "Won customers", value: <AnimatedNumber value={customers.length} format={formatCompactNumber} /> },
   ]
 
   const stages: FunnelStage[] = [
@@ -74,9 +75,11 @@ export function SalesFunnelSection({ totalFollowers }: { totalFollowers: number 
               <div key={stage.label} className="flex items-center gap-3">
                 <span className="w-32 shrink-0 text-xs text-muted-foreground">{stage.label}</span>
                 <div className="h-2 min-w-6 flex-1 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full rounded-full bg-brand" style={{ width: `${width}%` }} />
+                  <div className="h-full rounded-full bg-brand transition-[width] duration-700 ease-out" style={{ width: `${width}%` }} />
                 </div>
-                <span className="w-14 shrink-0 text-right text-xs font-medium tabular-nums text-foreground">{formatCompactNumber(stage.value)}</span>
+                <span className="w-14 shrink-0 text-right text-xs font-medium tabular-nums text-foreground">
+                  <AnimatedNumber value={stage.value} format={formatCompactNumber} />
+                </span>
                 <span className="w-16 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
                   {prev ? `${pct(stage.value, prev.value)}%` : ""}
                 </span>

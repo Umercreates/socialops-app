@@ -20,7 +20,7 @@ export function getCallingIntegrationStatus(): CallingIntegrationStatus {
 }
 
 const SIMULATED_AGENT_LINES = [
-  "Assalam-o-Alaikum! This is Aria calling from Easyland — aap ne humari services mein interest show ki thi, do you have a couple of minutes?",
+  "Assalam-o-Alaikum! This is Aria calling from EasyLife — aap ne humari services mein interest show ki thi, do you have a couple of minutes?",
   "Bohat khoob! Could you tell me a bit about what you're looking to get done?",
   "Theek hai, samajh gayi. And do you have a rough budget ya timeline in mind for this?",
   "Understood. Based on what you've shared, I think our business setup package would be a strong fit for you.",

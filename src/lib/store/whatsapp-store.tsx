@@ -36,7 +36,7 @@ interface WhatsAppAccountContextValue {
 
 const WhatsAppAccountContext = React.createContext<WhatsAppAccountContextValue | null>(null)
 
-/** Easyland runs a single WhatsApp Business account/number — this provider
+/** EasyLife runs a single WhatsApp Business account/number — this provider
  * is a plain context (no list store needed) since there's only ever one
  * record to hold. */
 export function WhatsAppProvider({ children }: { children: React.ReactNode }) {

@@ -77,7 +77,7 @@ export function ConnectAccountDialog({ trigger, defaultPlatform, open, onOpenCha
 
   return (
     <Dialog open={isOpen} onOpenChange={setOpen}>
-      {trigger && <DialogTrigger render={trigger} nativeButton={false} />}
+      {trigger && <DialogTrigger render={trigger} />}
       <DialogContent className="sm:max-w-md">
         {step === "form" && (
           <form onSubmit={handleConnect} className="flex flex-col gap-4">

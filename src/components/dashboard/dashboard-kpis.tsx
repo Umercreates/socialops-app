@@ -2,6 +2,7 @@
 
 import { Radio, Users, Zap, Send, CalendarClock, MessageSquare, MessageCircle, Workflow } from "lucide-react"
 import { MetricCard } from "@/components/dashboard/metric-card"
+import { AnimatedNumber } from "@/components/dashboard/animated-number"
 import { SecondaryStatStrip, type SecondaryStat } from "@/components/dashboard/secondary-stat-strip"
 import { formatCompactNumber } from "@/lib/format"
 import { useSocialAccounts } from "@/lib/store/accounts-store"
@@ -39,21 +40,21 @@ export function DashboardKpis({ summary }: { summary: DashboardSummary }) {
         <MetricCard
           icon={Users}
           label="Total followers"
-          value={formatCompactNumber(summary.totalFollowers)}
+          value={<AnimatedNumber value={summary.totalFollowers} format={formatCompactNumber} />}
           delta={{ value: summary.totalFollowersDelta30d, suffix: "", compact: true }}
           caption="vs. 30 days ago"
         />
         <MetricCard
           icon={Zap}
           label="Engagement rate"
-          value={`${summary.engagementRate30d}%`}
+          value={<AnimatedNumber value={summary.engagementRate30d} format={(n) => `${n.toFixed(1)}%`} />}
           delta={{ value: summary.engagementRateDelta30d, suffix: "pts", decimals: 1 }}
           caption="30-day average"
         />
         <MetricCard
           icon={Send}
           label="Posts published"
-          value={formatCompactNumber(summary.postsPublished30d)}
+          value={<AnimatedNumber value={summary.postsPublished30d} format={formatCompactNumber} />}
           caption="Last 30 days"
         />
       </div>

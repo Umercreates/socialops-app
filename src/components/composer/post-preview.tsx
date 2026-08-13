@@ -64,10 +64,10 @@ export function PostPreview({ platform, variant, media }: PostPreviewProps) {
   switch (platform) {
     case "instagram":
       return (
-        <div className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+        <div className="overflow-hidden rounded-xl bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10">
           <div className="flex items-center gap-2 px-3 py-2.5">
             <Avatar />
-            <span className="text-[13px] font-medium text-foreground">easyland</span>
+            <span className="text-[13px] font-medium text-foreground">easylife</span>
             <MoreHorizontal className="ml-auto size-4 text-muted-foreground" />
           </div>
           <MediaFrame media={media} aspect="aspect-square" />
@@ -80,13 +80,13 @@ export function PostPreview({ platform, variant, media }: PostPreviewProps) {
           <div className="flex flex-col gap-1 px-3 py-2.5">
             <span className="text-[13px] font-medium text-foreground">2,481 likes</span>
             <div className="text-[13px] leading-snug text-foreground">
-              <span className="font-medium">easyland</span>{" "}
+              <span className="font-medium">easylife</span>{" "}
               {variant.caption || <span className="text-muted-foreground">Your caption will appear here…</span>}
             </div>
             {variant.hashtags && <span className="text-[13px] text-brand">{variant.hashtags}</span>}
             {variant.firstComment && (
               <span className="text-[13px] text-muted-foreground">
-                <span className="font-medium text-foreground">easyland</span> {variant.firstComment}
+                <span className="font-medium text-foreground">easylife</span> {variant.firstComment}
               </span>
             )}
           </div>
@@ -95,7 +95,7 @@ export function PostPreview({ platform, variant, media }: PostPreviewProps) {
 
     case "facebook":
       return (
-        <div className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+        <div className="overflow-hidden rounded-xl bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10">
           <div className="flex items-center gap-2 px-3 py-2.5">
             <Avatar />
             <div className="flex flex-col">
@@ -125,7 +125,7 @@ export function PostPreview({ platform, variant, media }: PostPreviewProps) {
 
     case "linkedin":
       return (
-        <div className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+        <div className="overflow-hidden rounded-xl bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10">
           <div className="flex items-center gap-2 px-3 py-2.5">
             <Avatar />
             <div className="flex flex-col">
@@ -169,7 +169,7 @@ export function PostPreview({ platform, variant, media }: PostPreviewProps) {
           )}
           <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/70 to-transparent p-3">
             <div className="flex flex-col gap-1 text-white">
-              <span className="text-[12px] font-medium">@easyland</span>
+              <span className="text-[12px] font-medium">@easylife</span>
               <span className="line-clamp-2 text-[11px] leading-snug">{variant.caption || "Your caption will appear here…"}</span>
               {variant.hashtags && <span className="text-[11px] text-white/80">{variant.hashtags}</span>}
             </div>
@@ -184,7 +184,7 @@ export function PostPreview({ platform, variant, media }: PostPreviewProps) {
 
     case "youtube":
       return (
-        <div className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+        <div className="overflow-hidden rounded-xl bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10">
           <div className="relative">
             <MediaFrame media={media} aspect="aspect-video" />
             <span className="absolute inset-0 flex items-center justify-center">
@@ -210,13 +210,13 @@ export function PostPreview({ platform, variant, media }: PostPreviewProps) {
 
     case "x":
       return (
-        <div className="overflow-hidden rounded-xl bg-card p-3 ring-1 ring-foreground/10">
+        <div className="overflow-hidden rounded-xl bg-card p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10">
           <div className="flex gap-2.5">
             <Avatar />
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <div className="flex items-center gap-1.5 text-[13px]">
                 <span className="font-medium text-foreground">{CURRENT_WORKSPACE.name}</span>
-                <span className="text-muted-foreground">@northstarhq · now</span>
+                <span className="text-muted-foreground">@easylife · now</span>
               </div>
               <CaptionText text={combinedCaption} />
               {variant.link && <span className="truncate text-[12px] text-brand">{variant.link}</span>}

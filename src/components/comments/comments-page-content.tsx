@@ -95,7 +95,7 @@ export function CommentsPageContent() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="flex flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8 animate-in fade-in-0 slide-in-from-bottom-2 duration-500 ease-out">
       <div className="flex flex-col gap-1">
         <h2 className="text-xl font-semibold tracking-tight text-foreground">Comments</h2>
         <p className="text-sm text-muted-foreground">Everything left on your posts, across every platform.</p>
@@ -129,7 +129,7 @@ export function CommentsPageContent() {
           {visible.map((comment) => {
             const SentimentIcon = SENTIMENT_ICON[comment.sentiment]
             return (
-              <div key={comment.id} className="flex flex-col gap-2.5 rounded-xl bg-card p-3.5 ring-1 ring-foreground/10">
+              <div key={comment.id} className="flex flex-col gap-2.5 rounded-xl bg-card p-3.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10">
                 <div className="flex items-start gap-3">
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                     {initialsFor(comment.authorName)}

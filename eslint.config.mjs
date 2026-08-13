@@ -12,6 +12,16 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },
+  {
+    // app.js is the cPanel/Passenger production entry point — it must stay
+    // plain CommonJS since Passenger runs it directly with `node app.js`,
+    // with no bundler/TS step in front of it, and the package has no
+    // "type": "module". require() here is intentional, not a style slip.
+    files: ["app.js"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

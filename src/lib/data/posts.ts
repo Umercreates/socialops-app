@@ -52,7 +52,7 @@ const SCHEDULED_SEEDS: ScheduledSeed[] = [
     hashtags: "#casestudy #growthmarketing",
     platforms: ["linkedin", "facebook"],
     scheduledFor: "2026-08-10T15:00:00Z",
-    overrides: { facebook: { caption: "New case study is live — link in comments.", link: "https://easyland.co/case-studies/modern-trail" } },
+    overrides: { facebook: { caption: "New case study is live — link in comments.", link: "https://easylife.co/case-studies/modern-trail" } },
   },
   {
     title: "Weekly recap short — top 3 moments",
@@ -79,7 +79,7 @@ const SCHEDULED_SEEDS: ScheduledSeed[] = [
   },
   {
     title: "Client testimonial — Wild & Woven",
-    caption: "\"Easyland completely changed how we show up online.\" — Wild & Woven",
+    caption: "\"EasyLife completely changed how we show up online.\" — Wild & Woven",
     hashtags: "#testimonial #clientlove",
     platforms: ["linkedin", "instagram"],
     scheduledFor: "2026-08-14T14:00:00Z",
@@ -105,7 +105,7 @@ const SCHEDULED_SEEDS: ScheduledSeed[] = [
     hashtags: "#ugc #newservice",
     platforms: ["facebook", "linkedin", "instagram"],
     scheduledFor: "2026-08-17T16:00:00Z",
-    overrides: { facebook: { link: "https://easyland.co/services/ugc" } },
+    overrides: { facebook: { link: "https://easylife.co/services/ugc" } },
   },
   {
     title: "Trailrun Co. collab announcement",
@@ -224,7 +224,7 @@ const PUBLISHED_SEEDS: PublishedSeed[] = [
   { title: "Studio Q&A — ask us anything", caption: "We answered your top questions about working with an agency.", hashtags: "#qanda", platforms: ["youtube", "instagram"], publishedDaysAgo: 21, scale: 0.85 },
   { title: "New year, new brand kit", caption: "Refreshed our own brand kit — here's a look.", hashtags: "#branding", platforms: ["instagram", "x"], publishedDaysAgo: 24, scale: 1.0 },
   { title: "Client testimonial round-up", caption: "A few kind words from clients we've worked with this year.", hashtags: "#testimonials", platforms: ["linkedin", "facebook"], publishedDaysAgo: 27, scale: 0.7 },
-  { title: "Studio anniversary post", caption: "Two years of Easyland 🎉 thank you for trusting us with your brands.", hashtags: "#anniversary #grateful", platforms: ["instagram", "tiktok", "facebook"], publishedDaysAgo: 29, scale: 1.7 },
+  { title: "Studio anniversary post", caption: "Two years of EasyLife 🎉 thank you for trusting us with your brands.", hashtags: "#anniversary #grateful", platforms: ["instagram", "tiktok", "facebook"], publishedDaysAgo: 29, scale: 1.7 },
 ]
 
 const rand = createSeededRandom(2026)

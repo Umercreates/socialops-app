@@ -23,7 +23,7 @@ export function CallAgentPageContent() {
   const completedCalls = calls.filter((c) => c.endedAt).sort((a, b) => (b.endedAt ?? "").localeCompare(a.endedAt ?? ""))
 
   return (
-    <div className="flex flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="flex flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8 animate-in fade-in-0 slide-in-from-bottom-2 duration-500 ease-out">
       <div className="flex flex-col gap-1">
         <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-foreground">
           <PhoneCall className="size-5" />
@@ -45,7 +45,7 @@ export function CallAgentPageContent() {
       {completedCalls.length > 0 && (
         <div className="flex flex-col gap-2.5">
           <span className="text-sm font-medium text-foreground">Recent calls</span>
-          <div className="flex flex-col divide-y divide-border rounded-xl bg-card ring-1 ring-foreground/10">
+          <div className="flex flex-col divide-y divide-border rounded-xl bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10">
             {completedCalls.map((call) => {
               const lead = leads.find((l) => l.id === call.leadId)
               if (!lead) return null

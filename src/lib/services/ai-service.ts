@@ -28,9 +28,11 @@ function classifyIntent(text: string) {
   return "Uncategorized"
 }
 
-export async function getMockAiResponse(capability: AiCapability, input: string): Promise<string> {
-  await new Promise((resolve) => setTimeout(resolve, 700 + Math.random() * 500))
-
+/** Pure, synchronous template generator — no artificial delay. This is the
+ * guaranteed-safe fallback the API route reaches for when Gemini is
+ * unavailable (missing/exhausted key, network failure), so the AI Assistant
+ * always returns something rather than erroring out mid-demo. */
+export function buildTemplateResponse(capability: AiCapability, input: string): string {
   const topic = input.trim() || "your brand"
   const keywords = extractKeywords(input)
 
@@ -45,7 +47,7 @@ export async function getMockAiResponse(capability: AiCapability, input: string)
 
     case "hashtags": {
       const tags = keywords.length > 0 ? keywords.map((k) => `#${k}`) : ["#socialmedia", "#contentcreator"]
-      return `Suggested hashtags:\n\n${[...tags, "#easyland", "#smallbusiness", "#behindthescenes"].join("  ")}\n\nMix 2–3 broad tags with 3–4 niche ones for the best reach.`
+      return `Suggested hashtags:\n\n${[...tags, "#easylife", "#smallbusiness", "#behindthescenes"].join("  ")}\n\nMix 2–3 broad tags with 3–4 niche ones for the best reach.`
     }
 
     case "ideas":
@@ -66,4 +68,12 @@ export async function getMockAiResponse(capability: AiCapability, input: string)
     default:
       return "Here's a suggestion based on what you shared — let me know if you'd like a different angle."
   }
+}
+
+/** @deprecated kept for any direct callers — prefer POSTing to
+ * `/api/ai/assistant`, which tries real Gemini first and only falls back to
+ * this template locally on the server. */
+export async function getMockAiResponse(capability: AiCapability, input: string): Promise<string> {
+  await new Promise((resolve) => setTimeout(resolve, 700 + Math.random() * 500))
+  return buildTemplateResponse(capability, input)
 }
