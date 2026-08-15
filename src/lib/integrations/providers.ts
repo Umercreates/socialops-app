@@ -83,6 +83,16 @@ export interface OAuthConfig {
   /** True if the app's own Client ID/Secret are entered per-workspace
    * (agency reselling under their own app) rather than shared platform-wide. */
   perWorkspaceAppCredentials: boolean
+  /** If EasyLife registers and operates its own OAuth app for this provider,
+   * these env vars supply the Client ID/secret platform-wide so a client
+   * only ever has to click Connect Account - the simplest legitimate
+   * onboarding path, preferred over asking every business client to
+   * register their own developer app. Unset in this deployment (no
+   * platform-level provider app has been created); `resolveCredentialValue`
+   * checks these before falling through to a workspace's own saved
+   * clientId/clientSecret, so setting them later requires no code change or
+   * redeploy - purely an env/config addition. */
+  platformAppEnvVars?: { clientId: string; clientSecret: string }
 }
 
 export interface ProviderDefinition {
@@ -174,7 +184,11 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     credentialFields: OAUTH_APP_FIELDS,
     supportedModes: ["demo", "live"],
     requiresOAuth: true,
-    oauth: { ...META_OAUTH, scopes: ["pages_show_list", "pages_manage_posts", "pages_read_engagement"] },
+    oauth: {
+      ...META_OAUTH,
+      scopes: ["pages_show_list", "pages_manage_posts", "pages_read_engagement"],
+      platformAppEnvVars: { clientId: "META_PLATFORM_CLIENT_ID", clientSecret: "META_PLATFORM_CLIENT_SECRET" },
+    },
     requiresWebhook: false,
   },
   instagram: {
@@ -186,7 +200,11 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     credentialFields: OAUTH_APP_FIELDS,
     supportedModes: ["demo", "live"],
     requiresOAuth: true,
-    oauth: { ...META_OAUTH, scopes: ["instagram_basic", "instagram_content_publish", "pages_show_list"] },
+    oauth: {
+      ...META_OAUTH,
+      scopes: ["instagram_basic", "instagram_content_publish", "pages_show_list"],
+      platformAppEnvVars: { clientId: "META_PLATFORM_CLIENT_ID", clientSecret: "META_PLATFORM_CLIENT_SECRET" },
+    },
     requiresWebhook: false,
   },
   tiktok: {
@@ -203,6 +221,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
       tokenUrl: "https://open.tiktokapis.com/v2/oauth/token/",
       scopes: ["video.publish", "user.info.basic"],
       perWorkspaceAppCredentials: true,
+      platformAppEnvVars: { clientId: "TIKTOK_PLATFORM_CLIENT_ID", clientSecret: "TIKTOK_PLATFORM_CLIENT_SECRET" },
     },
     requiresWebhook: false,
   },
@@ -220,6 +239,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
       tokenUrl: "https://www.linkedin.com/oauth/v2/accessToken",
       scopes: ["w_member_social", "r_organization_social"],
       perWorkspaceAppCredentials: true,
+      platformAppEnvVars: { clientId: "LINKEDIN_PLATFORM_CLIENT_ID", clientSecret: "LINKEDIN_PLATFORM_CLIENT_SECRET" },
     },
     requiresWebhook: false,
   },
@@ -238,6 +258,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
       scopes: ["tweet.read", "tweet.write", "users.read"],
       usesPkce: true,
       perWorkspaceAppCredentials: true,
+      platformAppEnvVars: { clientId: "X_PLATFORM_CLIENT_ID", clientSecret: "X_PLATFORM_CLIENT_SECRET" },
     },
     requiresWebhook: false,
   },
@@ -250,7 +271,11 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     credentialFields: OAUTH_APP_FIELDS,
     supportedModes: ["demo", "live"],
     requiresOAuth: true,
-    oauth: { ...GOOGLE_OAUTH_BASE, scopes: ["https://www.googleapis.com/auth/youtube.upload"] },
+    oauth: {
+      ...GOOGLE_OAUTH_BASE,
+      scopes: ["https://www.googleapis.com/auth/youtube.upload"],
+      platformAppEnvVars: { clientId: "GOOGLE_PLATFORM_CLIENT_ID", clientSecret: "GOOGLE_PLATFORM_CLIENT_SECRET" },
+    },
     requiresWebhook: false,
   },
   omnidimension: {
@@ -278,7 +303,11 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     credentialFields: OAUTH_APP_FIELDS,
     supportedModes: ["demo", "live"],
     requiresOAuth: true,
-    oauth: { ...GOOGLE_OAUTH_BASE, scopes: ["https://www.googleapis.com/auth/spreadsheets"] },
+    oauth: {
+      ...GOOGLE_OAUTH_BASE,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+      platformAppEnvVars: { clientId: "GOOGLE_PLATFORM_CLIENT_ID", clientSecret: "GOOGLE_PLATFORM_CLIENT_SECRET" },
+    },
     requiresWebhook: false,
   },
   "google-calendar": {
@@ -290,7 +319,11 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     credentialFields: OAUTH_APP_FIELDS,
     supportedModes: ["demo", "live"],
     requiresOAuth: true,
-    oauth: { ...GOOGLE_OAUTH_BASE, scopes: ["https://www.googleapis.com/auth/calendar.events"] },
+    oauth: {
+      ...GOOGLE_OAUTH_BASE,
+      scopes: ["https://www.googleapis.com/auth/calendar.events"],
+      platformAppEnvVars: { clientId: "GOOGLE_PLATFORM_CLIENT_ID", clientSecret: "GOOGLE_PLATFORM_CLIENT_SECRET" },
+    },
     requiresWebhook: false,
   },
 }

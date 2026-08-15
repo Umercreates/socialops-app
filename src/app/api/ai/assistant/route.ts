@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
+import { requireAuth } from "@/lib/auth/guard"
+import { verifySameOrigin } from "@/lib/auth/csrf"
 import { generateWithGemini } from "@/lib/services/gemini-client"
 import { buildTemplateResponse } from "@/lib/services/ai-service"
+import { resolveActiveApiKey } from "@/lib/integrations/credential-resolution"
 import type { AiCapability } from "@/types"
 
 const SYSTEM_INSTRUCTION =
@@ -20,6 +23,12 @@ const CAPABILITY_PROMPT: Record<AiCapability, (input: string) => string> = {
 }
 
 export async function POST(request: Request) {
+  const originCheck = verifySameOrigin(request)
+  if (originCheck) return originCheck
+
+  const auth = await requireAuth()
+  if (!auth.ok) return auth.response
+
   let payload: { capability?: AiCapability; input?: string }
   try {
     payload = await request.json()
@@ -33,7 +42,8 @@ export async function POST(request: Request) {
   }
 
   const prompt = CAPABILITY_PROMPT[capability](input.trim() || "a new update")
-  const result = await generateWithGemini(prompt, SYSTEM_INSTRUCTION)
+  const { value: apiKey } = await resolveActiveApiKey(auth.ctx.workspaceId, "gemini")
+  const result = await generateWithGemini(prompt, SYSTEM_INSTRUCTION, apiKey)
 
   if (result.ok) {
     return NextResponse.json({ text: result.text, source: "gemini" })

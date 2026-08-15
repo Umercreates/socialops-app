@@ -23,16 +23,9 @@ export async function testProviderConnection(workspaceId: string, provider: Prov
       const { value: apiKey } = resolveCredentialValue(row, "apiKey", provider)
       if (!apiKey) return { ok: false, status: "not_configured", message: "No API key configured." }
 
-      const previous = process.env.GEMINI_API_KEY
-      process.env.GEMINI_API_KEY = apiKey
-      try {
-        const result = await generateWithGemini("Reply with exactly the word OK.", "You are a connection test. Reply with exactly OK.")
-        if (result.ok) return { ok: true, status: "connected", message: "Gemini responded successfully." }
-        return { ok: false, status: "error", message: result.reason }
-      } finally {
-        if (previous === undefined) delete process.env.GEMINI_API_KEY
-        else process.env.GEMINI_API_KEY = previous
-      }
+      const result = await generateWithGemini("Reply with exactly the word OK.", "You are a connection test. Reply with exactly OK.", apiKey)
+      if (result.ok) return { ok: true, status: "connected", message: "Gemini responded successfully." }
+      return { ok: false, status: "error", message: result.reason }
     }
 
     case "whatsapp": {

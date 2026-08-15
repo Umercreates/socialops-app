@@ -122,10 +122,11 @@ function fallbackTurn(newMessage: string): QualificationTurnResult {
 export async function runQualificationTurn(
   known: KnownQualification,
   recentTurns: ConversationTurn[],
-  newMessage: string
+  newMessage: string,
+  apiKey: string | null
 ): Promise<QualificationTurnResult> {
   const prompt = buildPrompt(known, recentTurns, newMessage)
-  const result = await generateWithGemini(prompt, SYSTEM_INSTRUCTION)
+  const result = await generateWithGemini(prompt, SYSTEM_INSTRUCTION, apiKey)
 
   if (!result.ok) return fallbackTurn(newMessage)
 

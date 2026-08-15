@@ -1,8 +1,11 @@
 /**
- * Server-only Gemini caller. `GEMINI_API_KEY` is read from `process.env`
- * here and nowhere else reachable from the client — this module must only
- * ever be imported by a Route Handler, never by a "use client" component,
- * or the key would end up in the browser bundle.
+ * Server-only Gemini caller — this module must only ever be imported by a
+ * Route Handler, never by a "use client" component, or a key would end up
+ * in the browser bundle. Takes the API key as an explicit parameter rather
+ * than reading `process.env` itself: callers resolve the right key first
+ * (workspace-saved key if that workspace has activated Gemini, else the
+ * platform fallback) via `resolveActiveApiKey`, so this function never
+ * silently uses the wrong workspace's — or nobody's — credential.
  *
  * Never throws: every failure mode (missing key, network error, non-2xx
  * response, empty completion) resolves to `{ ok: false }` so callers can
@@ -14,9 +17,8 @@ const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODE
 
 export type GeminiResult = { ok: true; text: string } | { ok: false; reason: string }
 
-export async function generateWithGemini(prompt: string, systemInstruction?: string): Promise<GeminiResult> {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) return { ok: false, reason: "GEMINI_API_KEY not configured" }
+export async function generateWithGemini(prompt: string, systemInstruction: string | undefined, apiKey: string | null): Promise<GeminiResult> {
+  if (!apiKey) return { ok: false, reason: "Gemini is not configured for this workspace." }
 
   try {
     const res = await fetch(`${ENDPOINT}?key=${apiKey}`, {

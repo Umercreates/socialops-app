@@ -11,6 +11,7 @@ import {
 } from "./repository"
 import { sendWhatsAppTextMessage } from "./cloud-api"
 import { runQualificationTurn, scoreQualification, type KnownQualification, type ConversationTurn } from "./gemini-qualification"
+import { resolveActiveApiKey } from "@/lib/integrations/credential-resolution"
 
 const STAGE_ORDER: LeadStage[] = ["whatsapp-started", "qualifying", "interested", "qualified", "ready-for-sales"]
 
@@ -114,7 +115,8 @@ export async function processInboundMessage(msg: InboundTextMessage): Promise<{ 
     .filter((r) => r.body)
     .map((r) => ({ sender: r.direction === "inbound" ? "customer" : "bot", body: r.body as string }))
 
-  const turn = await runQualificationTurn(known, recentTurns, msg.body)
+  const { value: geminiApiKey } = await resolveActiveApiKey(msg.workspaceId, "gemini")
+  const turn = await runQualificationTurn(known, recentTurns, msg.body, geminiApiKey)
   const mergedKnown: KnownQualification = { ...known, ...turn.extracted }
 
   const turnCount = recentRows.length + 1
