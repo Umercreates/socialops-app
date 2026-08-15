@@ -1,8 +1,9 @@
 import { randomUUID, randomBytes, createHash } from "node:crypto"
-import { eq, lt } from "drizzle-orm"
+import { eq, lt, and, inArray } from "drizzle-orm"
 import { withDb } from "@/lib/db/client"
-import { oauthStates } from "@/lib/db/schema"
+import { oauthStates, integrationConnections, jobs } from "@/lib/db/schema"
 import { PROVIDER_REGISTRY, type ProviderId } from "./providers"
+import { enqueueJob } from "@/lib/jobs/queue"
 
 /**
  * Generic OAuth connection framework shared by every OAuth provider (Meta,
@@ -226,5 +227,51 @@ export async function pruneExpiredOAuthStates(): Promise<number> {
   return withDb(async (db) => {
     const deleted = await db.delete(oauthStates).where(lt(oauthStates.expiresAt, new Date())).returning({ id: oauthStates.id })
     return deleted.length
+  })
+}
+
+const REFRESH_LOOKAHEAD_MS = 60 * 60 * 1000 // enqueue a refresh once a token is within an hour of expiring (or already past)
+
+/**
+ * Auto-refresh scheduler - the piece that makes "connect once, EasyLife
+ * keeps it alive" actually true rather than just a working handler nobody
+ * calls. Runs every cron tick: finds every live OAuth connection whose
+ * stored token is within an hour of expiring, and enqueues a `refresh_token`
+ * job for it unless one is already pending/running (so a slow cron cadence
+ * or a retry-backed-off job never gets double-enqueued). The actual refresh
+ * work happens in the job queue's `refreshTokenHandler`, same as any other
+ * job - this only decides *when* one is needed.
+ */
+export async function scheduleTokenRefreshes(): Promise<number> {
+  return withDb(async (db) => {
+    const dueConnections = await db
+      .select({ workspaceId: integrationConnections.workspaceId, provider: integrationConnections.provider, config: integrationConnections.config })
+      .from(integrationConnections)
+      .where(eq(integrationConnections.mode, "live"))
+
+    const candidates = dueConnections.filter((row) => {
+      const def = PROVIDER_REGISTRY[row.provider as ProviderId]
+      if (!def?.requiresOAuth) return false
+      const expiresAt = (row.config as Record<string, unknown> | null)?.tokenExpiresAt
+      if (typeof expiresAt !== "string") return false
+      const expiresAtMs = Date.parse(expiresAt)
+      return !Number.isNaN(expiresAtMs) && expiresAtMs - Date.now() <= REFRESH_LOOKAHEAD_MS
+    })
+    if (candidates.length === 0) return 0
+
+    const pending = await db
+      .select({ workspaceId: jobs.workspaceId, payload: jobs.payload })
+      .from(jobs)
+      .where(and(eq(jobs.type, "refresh_token"), inArray(jobs.status, ["pending", "running"])))
+    const pendingKeys = new Set(pending.map((j) => `${j.workspaceId}:${(j.payload as Record<string, unknown> | null)?.provider}`))
+
+    let enqueued = 0
+    for (const candidate of candidates) {
+      const key = `${candidate.workspaceId}:${candidate.provider}`
+      if (pendingKeys.has(key)) continue
+      await enqueueJob({ workspaceId: candidate.workspaceId, type: "refresh_token", payload: { provider: candidate.provider } })
+      enqueued += 1
+    }
+    return enqueued
   })
 }
