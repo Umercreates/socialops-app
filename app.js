@@ -34,6 +34,8 @@
  */
 
 const { createServer } = require("node:http");
+const fs = require("node:fs");
+const path = require("node:path");
 const next = require("next");
 
 const dev = false;
@@ -41,6 +43,89 @@ const port = parseInt(process.env.PORT || "3000", 10);
 const hostname = process.env.HOSTNAME || undefined; // undefined = bind all interfaces, matches typical Passenger setups
 
 console.log(`> Booting with NODE_ENV=${JSON.stringify(process.env.NODE_ENV)} PORT=${port}`);
+
+/**
+ * cPanel's Fileman zip-extraction has been observed to leave some nested
+ * directories under .next/static without execute/traverse permission,
+ * which crashes Next's static-file scanner on startup (EACCES on scandir)
+ * before it ever gets to serve a request. This walks .next/static once at
+ * boot - and only that directory, nothing else in the deployment - and
+ * normalizes modes before Next touches the filesystem, so a bad
+ * extraction self-heals on the next restart instead of requiring a
+ * manual, multi-round chmod-by-hand recovery. Runs as the same OS user
+ * that owns these files (the cPanel account), so no elevated privilege
+ * is needed - chmod only requires file ownership, not the file's current
+ * permission bits.
+ */
+function repairStaticPermissions(staticDir) {
+  const DIR_MODE = 0o755;
+  const FILE_MODE = 0o644;
+  let dirsFixed = 0;
+  let filesFixed = 0;
+  let failures = 0;
+
+  function walk(currentDir) {
+    let entries;
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch (error) {
+      failures += 1;
+      console.error(`> Permission repair: cannot read ${currentDir}: ${error.message}`);
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name);
+      let stat;
+      try {
+        stat = fs.lstatSync(fullPath); // lstat, never follow symlinks
+      } catch (error) {
+        failures += 1;
+        console.error(`> Permission repair: cannot stat ${fullPath}: ${error.message}`);
+        continue;
+      }
+
+      if (stat.isSymbolicLink()) continue;
+
+      if (stat.isDirectory()) {
+        try {
+          if ((stat.mode & 0o777) !== DIR_MODE) {
+            fs.chmodSync(fullPath, DIR_MODE);
+            dirsFixed += 1;
+          }
+        } catch (error) {
+          failures += 1;
+          console.error(`> Permission repair: cannot chmod dir ${fullPath}: ${error.message}`);
+          continue; // couldn't fix it - descending would just hit the same wall
+        }
+        walk(fullPath);
+      } else if (stat.isFile()) {
+        try {
+          if ((stat.mode & 0o777) !== FILE_MODE) {
+            fs.chmodSync(fullPath, FILE_MODE);
+            filesFixed += 1;
+          }
+        } catch (error) {
+          failures += 1;
+          console.error(`> Permission repair: cannot chmod file ${fullPath}: ${error.message}`);
+        }
+      }
+    }
+  }
+
+  if (!fs.existsSync(staticDir)) {
+    console.log(`> Permission repair: ${staticDir} does not exist, skipping.`);
+    return;
+  }
+
+  const startedAt = Date.now();
+  walk(staticDir);
+  console.log(
+    `> Permission repair: normalized ${dirsFixed} dir(s), ${filesFixed} file(s), ${failures} failure(s) under ${staticDir} in ${Date.now() - startedAt}ms.`
+  );
+}
+
+repairStaticPermissions(path.join(__dirname, ".next", "static"));
 
 const app = next({ dev, dir: __dirname, hostname, port, turbopack: false });
 const handleRequest = app.getRequestHandler();
