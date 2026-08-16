@@ -18,7 +18,6 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PlatformIcon, PLATFORM_LABEL } from "@/components/dashboard/platform-icon"
 import { TRIGGER_OPTIONS, CONDITION_OPTIONS, ACTION_OPTIONS, labelFor } from "@/lib/automation-options"
-import { generateAutomationId, useAutomations } from "@/lib/store/automations-store"
 import type {
   Automation,
   AutomationActionType,
@@ -30,9 +29,14 @@ import type {
 
 const PLATFORMS: SocialPlatform[] = ["instagram", "facebook", "linkedin", "tiktok", "youtube", "x"]
 
-export function AutomationBuilderDialog() {
-  const { addAutomation } = useAutomations()
+interface AutomationBuilderDialogProps {
+  onCreated: (automation: Automation) => void
+}
+
+export function AutomationBuilderDialog({ onCreated }: AutomationBuilderDialogProps) {
   const [open, setOpen] = React.useState(false)
+  const [saving, setSaving] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
 
   const [name, setName] = React.useState("")
   const [platform, setPlatform] = React.useState<SocialPlatform | "all">("all")
@@ -64,43 +68,51 @@ export function AutomationBuilderDialog() {
     setEscalateAfterFailures(false)
   }
 
-  function handleCreate(event: React.FormEvent) {
+  async function handleCreate(event: React.FormEvent) {
     event.preventDefault()
     if (!name.trim()) return
 
-    const automation: Automation = {
-      id: generateAutomationId(),
-      name: name.trim(),
-      status: "draft",
-      platform,
-      trigger: {
-        type: triggerType,
-        label: labelFor(TRIGGER_OPTIONS, triggerType) + (triggerValue ? `: "${triggerValue}"` : ""),
-        value: triggerValue || undefined,
-      },
-      condition: {
-        type: conditionType,
-        label: labelFor(CONDITION_OPTIONS, conditionType) + (conditionValue ? `: "${conditionValue}"` : ""),
-        value: conditionValue || undefined,
-      },
-      action: {
-        type: actionType,
-        label: labelFor(ACTION_OPTIONS, actionType) + (actionValue ? `: "${actionValue}"` : ""),
-        value: actionValue || undefined,
-      },
-      rules: {
-        runMode,
-        workingHoursOnly,
-        delayMinutes,
-        maxAttempts,
-        escalateAfterFailures,
-      },
-      runsLast30d: 0,
-      lastRunAt: null,
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/automations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          name: name.trim(),
+          platform,
+          trigger: {
+            type: triggerType,
+            label: labelFor(TRIGGER_OPTIONS, triggerType) + (triggerValue ? `: "${triggerValue}"` : ""),
+            value: triggerValue || undefined,
+          },
+          condition: {
+            type: conditionType,
+            label: labelFor(CONDITION_OPTIONS, conditionType) + (conditionValue ? `: "${conditionValue}"` : ""),
+            value: conditionValue || undefined,
+          },
+          action: {
+            type: actionType,
+            label: labelFor(ACTION_OPTIONS, actionType) + (actionValue ? `: "${actionValue}"` : ""),
+            value: actionValue || undefined,
+          },
+          rules: { runMode, workingHoursOnly, delayMinutes, maxAttempts, escalateAfterFailures },
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? "Failed to create automation.")
+        return
+      }
+      onCreated(data.automation as Automation)
+      reset()
+      setOpen(false)
+    } catch {
+      setError("Couldn't reach the server.")
+    } finally {
+      setSaving(false)
     }
-    addAutomation(automation)
-    reset()
-    setOpen(false)
   }
 
   const triggerNeedsValue = TRIGGER_OPTIONS.find((o) => o.value === triggerType)?.needsValue
@@ -289,9 +301,11 @@ export function AutomationBuilderDialog() {
             </div>
           </div>
 
+          {error && <p className="text-sm text-destructive">{error}</p>}
+
           <DialogFooter>
-            <Button type="submit" disabled={!name.trim()}>
-              Save automation
+            <Button type="submit" disabled={!name.trim() || saving}>
+              {saving ? "Saving..." : "Save automation"}
             </Button>
           </DialogFooter>
         </form>

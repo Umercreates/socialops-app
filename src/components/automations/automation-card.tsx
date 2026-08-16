@@ -7,7 +7,6 @@ import { Switch } from "@/components/ui/switch"
 import { PlatformIcon, PLATFORM_LABEL } from "@/components/dashboard/platform-icon"
 import { StatusBadge } from "@/components/dashboard/status-badge"
 import { formatRelativeTime } from "@/lib/format"
-import { MOCK_NOW } from "@/lib/data/constants"
 import type { Automation } from "@/types"
 
 interface AutomationCardProps {
@@ -64,7 +63,7 @@ export function AutomationCard({ automation, onToggle, onDuplicate, onDelete, on
 
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>{automation.runsLast30d} runs · 30d</span>
-        <span>{automation.lastRunAt ? `Last run ${formatRelativeTime(automation.lastRunAt, MOCK_NOW)}` : "Never run"}</span>
+        <span>{automation.lastRunAt ? `Last run ${formatRelativeTime(automation.lastRunAt, new Date())}` : "Never run"}</span>
       </div>
 
       <div className="flex items-center gap-1.5 border-t border-border pt-3">

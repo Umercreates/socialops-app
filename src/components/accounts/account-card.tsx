@@ -1,10 +1,9 @@
 "use client"
 
-import * as React from "react"
-import { RefreshCw, Unplug, Settings2, PlugZap } from "lucide-react"
+import Link from "next/link"
+import { Unplug, Settings2, PlugZap } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,21 +14,28 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { PlatformIcon, PLATFORM_LABEL } from "@/components/dashboard/platform-icon"
 import { StatusBadge } from "@/components/dashboard/status-badge"
-import { ConnectAccountDialog } from "@/components/accounts/connect-account-dialog"
 import { HEALTH_TONE, HEALTH_LABEL } from "@/lib/health"
 import { formatCompactNumber, formatRelativeTime } from "@/lib/format"
-import { useSocialAccounts } from "@/lib/store/accounts-store"
 import type { SocialAccount } from "@/types"
 
 function formatDate(iso: string) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(iso))
 }
 
-export function AccountCard({ account, now }: { account: SocialAccount; now: Date }) {
-  const { disconnect, reconnect } = useSocialAccounts()
-  const [autoSync, setAutoSync] = React.useState(true)
-  const [includeInAnalytics, setIncludeInAnalytics] = React.useState(true)
+interface AccountCardProps {
+  account: SocialAccount
+  now: Date
+  canManage: boolean
+  onDisconnect: (id: string) => void
+}
 
+/** Accounts are only ever created by a real OAuth connect-and-discover flow
+ * in Integrations - there is no "type in a handle" connect action here
+ * anymore, since that can never be more than a fake account with invented
+ * follower counts. Every action on this card that would require live
+ * provider data (reconnect, sync) routes to Integrations rather than
+ * faking a result locally. */
+export function AccountCard({ account, now, canManage, onDisconnect }: AccountCardProps) {
   if (account.health === "disconnected") {
     return (
       <Card className="items-center gap-3 border-dashed px-5 py-6 text-center ring-0 outline-2 outline-dashed outline-border">
@@ -40,15 +46,12 @@ export function AccountCard({ account, now }: { account: SocialAccount; now: Dat
           <span className="text-sm font-medium text-foreground">{PLATFORM_LABEL[account.platform]}</span>
           <span className="text-xs text-muted-foreground">Not connected</span>
         </div>
-        <ConnectAccountDialog
-          defaultPlatform={account.platform}
-          trigger={
-            <Button size="sm" variant="outline" className="mt-1">
-              <PlugZap />
-              Connect
-            </Button>
-          }
-        />
+        {canManage && (
+          <Button size="sm" variant="outline" className="mt-1" render={<Link href="/dashboard/integrations" />} nativeButton={false}>
+            <PlugZap />
+            Connect
+          </Button>
+        )}
       </Card>
     )
   }
@@ -67,39 +70,31 @@ export function AccountCard({ account, now }: { account: SocialAccount; now: Dat
             <span className="text-xs text-muted-foreground">{account.handle}</span>
           </div>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <button
-                type="button"
-                className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Account settings"
-              />
-            }
-          >
-            <Settings2 className="size-4" strokeWidth={1.75} />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64">
-            <DropdownMenuLabel className="px-1.5 py-1">Account settings</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <div className="flex items-center justify-between gap-3 px-1.5 py-1.5">
-                <div className="flex flex-col">
-                  <span className="text-sm text-foreground">Auto-sync analytics</span>
-                  <span className="text-xs text-muted-foreground">Refresh stats every hour</span>
-                </div>
-                <Switch checked={autoSync} onCheckedChange={setAutoSync} />
-              </div>
-              <div className="flex items-center justify-between gap-3 px-1.5 py-1.5">
-                <div className="flex flex-col">
-                  <span className="text-sm text-foreground">Include in analytics</span>
-                  <span className="text-xs text-muted-foreground">Show in cross-platform reports</span>
-                </div>
-                <Switch checked={includeInAnalytics} onCheckedChange={setIncludeInAnalytics} />
-              </div>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {canManage && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label="Account settings"
+                />
+              }
+            >
+              <Settings2 className="size-4" strokeWidth={1.75} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel className="px-1.5 py-1">Account</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <Link href="/dashboard/integrations" className="flex flex-col gap-0.5 rounded-md px-1.5 py-1.5 hover:bg-muted">
+                  <span className="text-sm text-foreground">Manage in Integrations</span>
+                  <span className="text-xs text-muted-foreground">Credentials, webhook, and readiness live there</span>
+                </Link>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       <StatusBadge tone={HEALTH_TONE[account.health]} className="w-fit">
@@ -123,23 +118,25 @@ export function AccountCard({ account, now }: { account: SocialAccount; now: Dat
         </div>
       </div>
 
-      <div className="flex items-center gap-2 border-t border-border pt-3.5">
-        {needsReconnect ? (
-          <Button size="sm" className="flex-1" onClick={() => reconnect(account.id)}>
-            <RefreshCw />
-            Reconnect
+      {canManage && (
+        <div className="flex items-center gap-2 border-t border-border pt-3.5">
+          {needsReconnect ? (
+            <Button size="sm" className="flex-1" render={<Link href="/dashboard/integrations" />} nativeButton={false}>
+              <PlugZap />
+              Reconnect
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" className="flex-1" render={<Link href="/dashboard/integrations" />} nativeButton={false}>
+              <Settings2 />
+              Manage
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => onDisconnect(account.id)}>
+            <Unplug />
+            Disconnect
           </Button>
-        ) : (
-          <Button size="sm" variant="outline" className="flex-1" onClick={() => reconnect(account.id)}>
-            <RefreshCw />
-            Sync now
-          </Button>
-        )}
-        <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => disconnect(account.id)}>
-          <Unplug />
-          Disconnect
-        </Button>
-      </div>
+        </div>
+      )}
     </Card>
   )
 }
