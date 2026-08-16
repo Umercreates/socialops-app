@@ -1,12 +1,12 @@
 "use client"
 
 import * as React from "react"
+import { Loader2 } from "lucide-react"
 import { PlatformIcon } from "@/components/dashboard/platform-icon"
 import { PostThumbnail } from "@/components/dashboard/post-thumbnail"
 import { PlatformFilter, type PlatformFilterValue } from "@/components/dashboard/platform-filter"
 import { PostDetailDialog } from "@/components/calendar/post-detail-dialog"
 import { formatCompactNumber } from "@/lib/format"
-import { usePosts } from "@/lib/store/posts-store"
 import type { Post } from "@/types"
 
 function formatDate(iso: string) {
@@ -14,11 +14,42 @@ function formatDate(iso: string) {
 }
 
 export function PublishedPostsContent() {
-  const { posts } = usePosts()
+  const [posts, setPosts] = React.useState<Post[] | null>(null)
   const [platformFilter, setPlatformFilter] = React.useState<PlatformFilterValue>("all")
   const [selectedPost, setSelectedPost] = React.useState<Post | null>(null)
 
-  const published = posts
+  React.useEffect(() => {
+    let cancelled = false
+    fetch("/api/posts", { credentials: "same-origin" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setPosts(data.posts ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setPosts([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function deletePost(id: string) {
+    setPosts((prev) => prev?.filter((p) => p.id !== id) ?? null)
+    await fetch(`/api/posts/${id}`, { method: "DELETE", credentials: "same-origin" }).catch(() => {})
+  }
+
+  async function reschedulePost(id: string, iso: string) {
+    const res = await fetch(`/api/posts/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ status: "scheduled", scheduledFor: iso }),
+    })
+    const data = await res.json()
+    if (res.ok) setPosts((prev) => prev?.map((p) => (p.id === id ? data.post : p)) ?? null)
+  }
+
+  const published = (posts ?? [])
     .filter((p) => p.status === "published")
     .filter((p) => platformFilter === "all" || p.platforms.includes(platformFilter))
     .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
@@ -46,7 +77,12 @@ export function PublishedPostsContent() {
         <PlatformFilter value={platformFilter} onChange={setPlatformFilter} />
       </div>
 
-      {published.length === 0 ? (
+      {!posts ? (
+        <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading...
+        </div>
+      ) : published.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border px-4 py-16 text-center text-sm text-muted-foreground">
           No published posts for this filter yet.
         </div>
@@ -97,7 +133,12 @@ export function PublishedPostsContent() {
         </div>
       )}
 
-      <PostDetailDialog post={selectedPost} onOpenChange={(open) => !open && setSelectedPost(null)} />
+      <PostDetailDialog
+        post={selectedPost}
+        onOpenChange={(open) => !open && setSelectedPost(null)}
+        onDelete={deletePost}
+        onReschedule={reschedulePost}
+      />
     </div>
   )
 }

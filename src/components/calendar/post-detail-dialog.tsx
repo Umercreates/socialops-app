@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { CalendarClock, Copy, Trash2, Eye, Heart, MessageSquare, Repeat2, Users } from "lucide-react"
+import { CalendarClock, Trash2, Eye, Heart, MessageSquare, Repeat2, Users } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,6 @@ import { StatusBadge } from "@/components/dashboard/status-badge"
 import { ScheduleDialog } from "@/components/composer/schedule-dialog"
 import { POST_STATUS_TONE, POST_STATUS_LABEL } from "@/lib/post-status"
 import { formatCompactNumber } from "@/lib/format"
-import { usePosts } from "@/lib/store/posts-store"
 import type { Post } from "@/types"
 
 function formatDateTime(iso: string) {
@@ -34,10 +33,11 @@ function formatDateTime(iso: string) {
 interface PostDetailDialogProps {
   post: Post | null
   onOpenChange: (open: boolean) => void
+  onDelete: (id: string) => void
+  onReschedule: (id: string, iso: string) => void
 }
 
-export function PostDetailDialog({ post, onOpenChange }: PostDetailDialogProps) {
-  const { updatePost, duplicatePost, removePost } = usePosts()
+export function PostDetailDialog({ post, onOpenChange, onDelete, onReschedule }: PostDetailDialogProps) {
   const [rescheduleOpen, setRescheduleOpen] = React.useState(false)
 
   if (!post) return null
@@ -89,16 +89,12 @@ export function PostDetailDialog({ post, onOpenChange }: PostDetailDialogProps) 
 
           <DialogFooter className="!mt-0 flex-row flex-wrap items-center justify-between gap-2 sm:justify-between">
             <div className="flex gap-2">
-              <Button variant="ghost" size="sm" onClick={() => duplicatePost(post.id)}>
-                <Copy />
-                Duplicate
-              </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 className="text-destructive hover:text-destructive"
                 onClick={() => {
-                  removePost(post.id)
+                  onDelete(post.id)
                   onOpenChange(false)
                 }}
               >
@@ -120,7 +116,7 @@ export function PostDetailDialog({ post, onOpenChange }: PostDetailDialogProps) 
         open={rescheduleOpen}
         onOpenChange={setRescheduleOpen}
         onConfirm={(iso) => {
-          updatePost(post.id, { status: "scheduled", scheduledFor: iso, failureReason: undefined })
+          onReschedule(post.id, iso)
           setRescheduleOpen(false)
           onOpenChange(false)
         }}

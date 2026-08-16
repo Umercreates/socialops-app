@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { Pencil, CalendarClock, Copy, Trash2, Plus } from "lucide-react"
+import { Pencil, CalendarClock, Trash2, Plus, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PlatformIcon } from "@/components/dashboard/platform-icon"
 import { PostThumbnail } from "@/components/dashboard/post-thumbnail"
@@ -11,7 +11,6 @@ import { PlatformFilter, type PlatformFilterValue } from "@/components/dashboard
 import { ScheduleDialog } from "@/components/composer/schedule-dialog"
 import { EditPostDialog } from "@/components/scheduled/edit-post-dialog"
 import { POST_STATUS_TONE, POST_STATUS_LABEL } from "@/lib/post-status"
-import { usePosts } from "@/lib/store/posts-store"
 import type { Post, PostStatus } from "@/types"
 import { cn } from "@/lib/utils"
 
@@ -25,13 +24,59 @@ function formatTime(iso: string) {
 }
 
 export function ScheduledPostsContent() {
-  const { posts, duplicatePost, removePost, updatePost } = usePosts()
+  const [posts, setPosts] = React.useState<Post[] | null>(null)
+  const [error, setError] = React.useState<string | null>(null)
   const [platformFilter, setPlatformFilter] = React.useState<PlatformFilterValue>("all")
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all")
   const [editingPost, setEditingPost] = React.useState<Post | null>(null)
   const [reschedulingPost, setReschedulingPost] = React.useState<Post | null>(null)
 
-  const base = posts.filter((p): p is Post & { status: "scheduled" | "failed" } => p.status === "scheduled" || p.status === "failed")
+  React.useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch("/api/posts", { credentials: "same-origin" })
+        if (!res.ok) throw new Error("Failed to load posts")
+        const data = await res.json()
+        if (!cancelled) setPosts(data.posts)
+      } catch {
+        if (!cancelled) setError("Couldn't load scheduled posts. Try refreshing.")
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function patchPost(id: string, patch: Record<string, unknown>) {
+    const res = await fetch(`/api/posts/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(patch),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setError(data.error ?? "That update failed.")
+      return
+    }
+    setPosts((prev) => prev?.map((p) => (p.id === id ? data.post : p)) ?? null)
+  }
+
+  async function removePost(id: string) {
+    const previous = posts
+    setPosts((prev) => prev?.filter((p) => p.id !== id) ?? null)
+    try {
+      const res = await fetch(`/api/posts/${id}`, { method: "DELETE", credentials: "same-origin" })
+      if (!res.ok) throw new Error("Delete failed")
+    } catch {
+      setPosts(previous ?? null)
+      setError("Couldn't delete that post. Try again.")
+    }
+  }
+
+  const base = posts?.filter((p): p is Post & { status: "scheduled" | "failed" } => p.status === "scheduled" || p.status === "failed") ?? []
   const filtered = base
     .filter((p) => statusFilter === "all" || p.status === statusFilter)
     .filter((p) => platformFilter === "all" || p.platforms.includes(platformFilter))
@@ -75,7 +120,14 @@ export function ScheduledPostsContent() {
         <PlatformFilter value={platformFilter} onChange={setPlatformFilter} />
       </div>
 
-      {filtered.length === 0 ? (
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {!posts ? (
+        <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading...
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border px-4 py-16 text-center text-sm text-muted-foreground">
           Nothing matches these filters.
         </div>
@@ -117,9 +169,6 @@ export function ScheduledPostsContent() {
                   <Button variant="ghost" size="icon-sm" aria-label="Reschedule" onClick={() => setReschedulingPost(post)}>
                     <CalendarClock />
                   </Button>
-                  <Button variant="ghost" size="icon-sm" aria-label="Duplicate" onClick={() => duplicatePost(post.id)}>
-                    <Copy />
-                  </Button>
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -136,13 +185,17 @@ export function ScheduledPostsContent() {
         </div>
       )}
 
-      <EditPostDialog post={editingPost} onOpenChange={(open) => !open && setEditingPost(null)} />
+      <EditPostDialog
+        post={editingPost}
+        onOpenChange={(open) => !open && setEditingPost(null)}
+        onSave={(id, patch) => patchPost(id, patch)}
+      />
       <ScheduleDialog
         open={Boolean(reschedulingPost)}
         onOpenChange={(open) => !open && setReschedulingPost(null)}
         onConfirm={(iso) => {
           if (reschedulingPost) {
-            updatePost(reschedulingPost.id, { status: "scheduled", scheduledFor: iso, failureReason: undefined })
+            patchPost(reschedulingPost.id, { status: "scheduled", scheduledFor: iso })
           }
           setReschedulingPost(null)
         }}

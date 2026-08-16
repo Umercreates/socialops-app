@@ -2,25 +2,55 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { MonthView } from "@/components/calendar/month-view"
 import { WeekView } from "@/components/calendar/week-view"
 import { ListView } from "@/components/calendar/list-view"
 import { PostDetailDialog } from "@/components/calendar/post-detail-dialog"
 import { formatMonthLabel, formatDayLabel, getWeekDays } from "@/components/calendar/calendar-utils"
-import { usePosts } from "@/lib/store/posts-store"
-import { MOCK_NOW } from "@/lib/data/constants"
 import type { Post } from "@/types"
 import { cn } from "@/lib/utils"
 
 type View = "month" | "week" | "list"
 
 export function CalendarPageContent() {
-  const { posts } = usePosts()
+  const [posts, setPosts] = React.useState<Post[] | null>(null)
+  const [now] = React.useState(() => new Date())
   const [view, setView] = React.useState<View>("month")
-  const [anchor, setAnchor] = React.useState(new Date(MOCK_NOW))
+  const [anchor, setAnchor] = React.useState(now)
   const [selectedPost, setSelectedPost] = React.useState<Post | null>(null)
+
+  React.useEffect(() => {
+    let cancelled = false
+    fetch("/api/posts", { credentials: "same-origin" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setPosts(data.posts ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setPosts([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function deletePost(id: string) {
+    setPosts((prev) => prev?.filter((p) => p.id !== id) ?? null)
+    await fetch(`/api/posts/${id}`, { method: "DELETE", credentials: "same-origin" }).catch(() => {})
+  }
+
+  async function reschedulePost(id: string, iso: string) {
+    const res = await fetch(`/api/posts/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ status: "scheduled", scheduledFor: iso }),
+    })
+    const data = await res.json()
+    if (res.ok) setPosts((prev) => prev?.map((p) => (p.id === id ? data.post : p)) ?? null)
+  }
 
   function step(direction: 1 | -1) {
     setAnchor((prev) => {
@@ -64,7 +94,7 @@ export function CalendarPageContent() {
           <Button variant="outline" size="icon-sm" onClick={() => step(1)} aria-label="Next">
             <ChevronRight />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setAnchor(new Date(MOCK_NOW))}>
+          <Button variant="ghost" size="sm" onClick={() => setAnchor(now)}>
             Today
           </Button>
         </div>
@@ -86,11 +116,25 @@ export function CalendarPageContent() {
         </div>
       </div>
 
-      {view === "month" && <MonthView monthAnchor={anchor} posts={posts} today={MOCK_NOW} onSelectPost={setSelectedPost} />}
-      {view === "week" && <WeekView weekAnchor={anchor} posts={posts} today={MOCK_NOW} onSelectPost={setSelectedPost} />}
-      {view === "list" && <ListView posts={posts} onSelectPost={setSelectedPost} />}
+      {!posts ? (
+        <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading...
+        </div>
+      ) : (
+        <>
+          {view === "month" && <MonthView monthAnchor={anchor} posts={posts} today={now} onSelectPost={setSelectedPost} />}
+          {view === "week" && <WeekView weekAnchor={anchor} posts={posts} today={now} onSelectPost={setSelectedPost} />}
+          {view === "list" && <ListView posts={posts} onSelectPost={setSelectedPost} />}
+        </>
+      )}
 
-      <PostDetailDialog post={selectedPost} onOpenChange={(open) => !open && setSelectedPost(null)} />
+      <PostDetailDialog
+        post={selectedPost}
+        onOpenChange={(open) => !open && setSelectedPost(null)}
+        onDelete={deletePost}
+        onReschedule={reschedulePost}
+      />
     </div>
   )
 }

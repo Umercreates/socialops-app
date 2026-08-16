@@ -6,16 +6,15 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
-import { usePosts } from "@/lib/store/posts-store"
 import type { Post } from "@/types"
 
 interface EditPostDialogProps {
   post: Post | null
   onOpenChange: (open: boolean) => void
+  onSave: (postId: string, patch: Pick<Post, "baseCaption" | "baseHashtags" | "variants">) => void
 }
 
-export function EditPostDialog({ post, onOpenChange }: EditPostDialogProps) {
-  const { updatePost } = usePosts()
+export function EditPostDialog({ post, onOpenChange, onSave }: EditPostDialogProps) {
   const [caption, setCaption] = React.useState(post?.baseCaption ?? "")
   const [hashtags, setHashtags] = React.useState(post?.baseHashtags ?? "")
 
@@ -32,7 +31,7 @@ export function EditPostDialog({ post, onOpenChange }: EditPostDialogProps) {
   function handleSave(event: React.FormEvent) {
     event.preventDefault()
     if (!post) return
-    updatePost(post.id, {
+    onSave(post.id, {
       baseCaption: caption,
       baseHashtags: hashtags,
       variants: post.variants.map((v) => ({ ...v, caption, hashtags })),

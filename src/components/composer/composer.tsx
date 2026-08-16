@@ -16,8 +16,7 @@ import { PostPreview } from "@/components/composer/post-preview"
 import { ScheduleDialog } from "@/components/composer/schedule-dialog"
 import { PlatformIcon, PLATFORM_LABEL } from "@/components/dashboard/platform-icon"
 import { ALL_PLATFORMS, EMPTY_VARIANT, type ComposerVariantState } from "@/components/composer/composer-types"
-import { usePosts, generatePostId } from "@/lib/store/posts-store"
-import type { Post, PostMedia, PostVariant, SocialPlatform } from "@/types"
+import type { PostMedia, PostVariant, SocialPlatform, SocialAccount } from "@/types"
 
 type PublishFlow = "idle" | "saving-draft" | "scheduling" | "preparing" | "publishing" | "done"
 
@@ -46,7 +45,14 @@ function deriveTitle(baseCaption: string) {
 }
 
 export function Composer() {
-  const { addPost } = usePosts()
+  const [accounts, setAccounts] = React.useState<SocialAccount[]>([])
+  React.useEffect(() => {
+    fetch("/api/social-accounts", { credentials: "same-origin" })
+      .then((res) => res.json())
+      .then((data) => setAccounts(data.accounts ?? []))
+      .catch(() => setAccounts([]))
+  }, [])
+  const connectedPlatforms = new Set(accounts.filter((a) => a.health !== "disconnected").map((a) => a.platform))
 
   const [baseCaption, setBaseCaption] = React.useState("")
   const [baseHashtags, setBaseHashtags] = React.useState("")
@@ -102,61 +108,83 @@ export function Composer() {
     setResultLink(null)
   }
 
-  function buildBasePost(status: Post["status"], scheduledFor?: string): Post {
-    const now = new Date().toISOString()
-    return {
-      id: generatePostId(),
-      title: deriveTitle(baseCaption),
-      status,
-      baseCaption,
-      baseHashtags,
-      media,
-      platforms: selectedPlatforms,
-      variants: buildVariants(selectedPlatforms, variants),
-      scheduledFor,
-      createdAt: now,
-      updatedAt: now,
-      author: { id: "usr_maya_reyes", name: "Maya Reyes" },
-    }
+  const [submitError, setSubmitError] = React.useState<string | null>(null)
+
+  function accountIdsFor(platforms: SocialPlatform[]): string[] {
+    return platforms
+      .map((platform) => accounts.find((a) => a.platform === platform && a.health !== "disconnected")?.id)
+      .filter((id): id is string => Boolean(id))
+  }
+
+  async function submitPost(status: "draft" | "scheduled" | "publishing", scheduledFor?: string) {
+    const res = await fetch("/api/posts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        title: deriveTitle(baseCaption),
+        baseCaption,
+        baseHashtags,
+        media,
+        platforms: selectedPlatforms,
+        variants: buildVariants(selectedPlatforms, variants),
+        status,
+        scheduledFor,
+        accountIds: accountIdsFor(selectedPlatforms),
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? "Something went wrong.")
+    return data.post
   }
 
   async function handleSaveDraft() {
     if (selectedPlatforms.length === 0) return
     setFlow("saving-draft")
-    await new Promise((r) => setTimeout(r, 500))
-    addPost(buildBasePost("draft"))
-    setResultLink({ href: "/dashboard/calendar", label: "View in Calendar" })
-    setFlow("done")
+    setSubmitError(null)
+    try {
+      await submitPost("draft")
+      setResultLink({ href: "/dashboard/calendar", label: "View in Calendar" })
+      setFlow("done")
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Couldn't save the draft.")
+      setFlow("idle")
+    }
   }
 
   function handleScheduleConfirmed(isoDate: string) {
     ;(async () => {
       setFlow("scheduling")
-      await new Promise((r) => setTimeout(r, 600))
-      addPost(buildBasePost("scheduled", isoDate))
-      setResultLink({ href: "/dashboard/scheduled", label: "View in Scheduled Posts" })
-      setFlow("done")
+      setSubmitError(null)
+      try {
+        await submitPost("scheduled", isoDate)
+        setResultLink({ href: "/dashboard/scheduled", label: "View in Scheduled Posts" })
+        setFlow("done")
+      } catch (error) {
+        setSubmitError(error instanceof Error ? error.message : "Couldn't schedule this post.")
+        setFlow("idle")
+      }
     })()
   }
 
   async function handlePublishNow() {
     if (selectedPlatforms.length === 0) return
     setFlow("preparing")
-    await new Promise((r) => setTimeout(r, 700))
-    setFlow("publishing")
-    await new Promise((r) => setTimeout(r, 900))
-    const post = buildBasePost("published", undefined)
-    addPost({
-      ...post,
-      publishedAt: new Date().toISOString(),
-      analytics: { reach: 0, views: 0, likes: 0, comments: 0, shares: 0, engagementRate: 0 },
-    })
-    setResultLink({ href: "/dashboard/published", label: "View in Published Posts" })
-    setFlow("done")
+    setSubmitError(null)
+    try {
+      setFlow("publishing")
+      await submitPost("publishing")
+      setResultLink({ href: "/dashboard/published", label: "Check publishing results" })
+      setFlow("done")
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Couldn't start publishing.")
+      setFlow("idle")
+    }
   }
 
   const isBusy = flow === "saving-draft" || flow === "scheduling" || flow === "preparing" || flow === "publishing"
   const canSubmit = selectedPlatforms.length > 0 && (baseCaption.trim().length > 0 || media.length > 0)
+  const hasConnectedSelection = selectedPlatforms.some((p) => connectedPlatforms.has(p))
 
   if (flow === "done" && resultLink) {
     return (
@@ -168,7 +196,9 @@ export function Composer() {
           <div className="flex flex-col gap-1">
             <h2 className="text-base font-medium text-foreground">Post saved</h2>
             <p className="text-sm text-muted-foreground">
-              This is a demo publish — no content was actually sent to any platform.
+              {hasConnectedSelection
+                ? "Saved to the database. Each connected platform publishes independently — check the result there."
+                : "Saved as a draft. Connect a platform in Integrations before scheduling or publishing it."}
             </p>
           </div>
           <div className="mt-2 flex w-full flex-col gap-2">
@@ -224,7 +254,7 @@ export function Composer() {
 
           <Card className="gap-4 px-4 py-4 sm:px-5 sm:py-5">
             <Label>Platforms</Label>
-            <PlatformSelector selected={selected} onToggle={togglePlatform} />
+            <PlatformSelector selected={selected} onToggle={togglePlatform} connectedPlatforms={connectedPlatforms} />
           </Card>
 
           <Card className="gap-4 px-4 py-4 sm:px-5 sm:py-5">
@@ -247,11 +277,11 @@ export function Composer() {
               {flow === "saving-draft" ? <Loader2 className="animate-spin" /> : <Save />}
               Save draft
             </Button>
-            <Button variant="outline" onClick={() => setScheduleOpen(true)} disabled={isBusy || !canSubmit}>
+            <Button variant="outline" onClick={() => setScheduleOpen(true)} disabled={isBusy || !canSubmit || !hasConnectedSelection}>
               {flow === "scheduling" ? <Loader2 className="animate-spin" /> : <CalendarClock />}
               Schedule
             </Button>
-            <Button className="ml-auto" onClick={handlePublishNow} disabled={isBusy || !canSubmit}>
+            <Button className="ml-auto" onClick={handlePublishNow} disabled={isBusy || !canSubmit || !hasConnectedSelection}>
               {flow === "preparing" || flow === "publishing" ? <Loader2 className="animate-spin" /> : <Send />}
               {flow === "preparing" ? "Preparing…" : flow === "publishing" ? "Publishing…" : "Publish now"}
             </Button>
@@ -260,6 +290,12 @@ export function Composer() {
                 Add a caption or media and select at least one platform to continue.
               </p>
             )}
+            {canSubmit && !hasConnectedSelection && (
+              <p className="w-full text-xs text-muted-foreground">
+                None of the selected platforms have a connected account yet — you can still save a draft, but scheduling or publishing needs one connected in Integrations.
+              </p>
+            )}
+            {submitError && <p className="w-full text-xs text-destructive">{submitError}</p>}
           </Card>
         </div>
 
