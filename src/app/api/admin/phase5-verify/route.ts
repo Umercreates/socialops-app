@@ -6,6 +6,8 @@ import { withDb } from "@/lib/db/client"
 import { users, workspaces, workspaceMembers, sessions, leads, leadActivities, calls, integrationConnections } from "@/lib/db/schema"
 import { hashPassword, normalizeEmail } from "@/lib/auth/password"
 import { createSession } from "@/lib/auth/session"
+import { recordTestResult } from "@/lib/integrations/repository"
+import { isProviderId } from "@/lib/integrations/providers"
 import { apiError } from "@/lib/api/errors"
 
 /**
@@ -36,6 +38,11 @@ const actionSchema = z.discriminatedUnion("action", [
     role: z.enum(["owner", "admin", "manager", "sales"]).default("owner"),
   }),
   z.object({ action: z.literal("teardown-fixtures") }),
+  z.object({
+    action: z.literal("force-test-pass"),
+    workspaceId: z.string().uuid(),
+    provider: z.string(),
+  }),
 ])
 
 export async function POST(request: Request) {
@@ -67,6 +74,25 @@ export async function POST(request: Request) {
 
       const { cookieValue } = await createSession({ userId, workspaceId, rememberMe: false })
       return NextResponse.json({ userId, workspaceId, email, sessionCookie: cookieValue })
+    }
+
+    if (body.action === "force-test-pass") {
+      if (!isProviderId(body.provider)) {
+        return NextResponse.json({ error: "Unknown provider" }, { status: 400 })
+      }
+      // Confined to fixture workspaces only - never usable against a real
+      // workspace, even with a valid SETUP_TOKEN, since this bypasses the
+      // real provider network call that a genuine Test Connection makes.
+      const isFixtureWorkspace = await withDb(async (db) => {
+        const rows = await db.select({ slug: workspaces.slug }).from(workspaces).where(eq(workspaces.id, body.workspaceId)).limit(1)
+        return rows[0]?.slug.startsWith(FIXTURE_SLUG_PREFIX) ?? false
+      })
+      if (!isFixtureWorkspace) {
+        return NextResponse.json({ error: "Not a fixture workspace" }, { status: 403 })
+      }
+
+      await recordTestResult(body.workspaceId, body.provider, { ok: true, status: "connected" })
+      return NextResponse.json({ ok: true })
     }
 
     const summary = await withDb(async (db) => {
