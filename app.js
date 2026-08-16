@@ -45,19 +45,22 @@ const hostname = process.env.HOSTNAME || undefined; // undefined = bind all inte
 console.log(`> Booting with NODE_ENV=${JSON.stringify(process.env.NODE_ENV)} PORT=${port}`);
 
 /**
- * cPanel's Fileman zip-extraction has been observed to leave some nested
- * directories under .next/static without execute/traverse permission,
- * which crashes Next's static-file scanner on startup (EACCES on scandir)
- * before it ever gets to serve a request. This walks .next/static once at
- * boot - and only that directory, nothing else in the deployment - and
- * normalizes modes before Next touches the filesystem, so a bad
+ * cPanel's Fileman zip-extraction has been observed to leave nested
+ * directories under .next without execute/traverse permission - first
+ * seen under .next/static (crashing Next's static-file scanner with
+ * EACCES on scandir), then confirmed under .next/server/app/api/** too
+ * (individual route.js files becoming unreachable - MODULE_NOT_FOUND -
+ * even though the parent directory listed them as present). Not confined
+ * to one subtree, so this walks the whole .next directory once at boot -
+ * nothing outside it, never .env, uploads, the database, or other apps -
+ * and normalizes modes before Next touches the filesystem, so a bad
  * extraction self-heals on the next restart instead of requiring a
  * manual, multi-round chmod-by-hand recovery. Runs as the same OS user
  * that owns these files (the cPanel account), so no elevated privilege
  * is needed - chmod only requires file ownership, not the file's current
  * permission bits.
  */
-function repairStaticPermissions(staticDir) {
+function repairPermissions(targetDir) {
   const DIR_MODE = 0o755;
   const FILE_MODE = 0o644;
   let dirsFixed = 0;
@@ -113,19 +116,19 @@ function repairStaticPermissions(staticDir) {
     }
   }
 
-  if (!fs.existsSync(staticDir)) {
-    console.log(`> Permission repair: ${staticDir} does not exist, skipping.`);
+  if (!fs.existsSync(targetDir)) {
+    console.log(`> Permission repair: ${targetDir} does not exist, skipping.`);
     return;
   }
 
   const startedAt = Date.now();
-  walk(staticDir);
+  walk(targetDir);
   console.log(
-    `> Permission repair: normalized ${dirsFixed} dir(s), ${filesFixed} file(s), ${failures} failure(s) under ${staticDir} in ${Date.now() - startedAt}ms.`
+    `> Permission repair: normalized ${dirsFixed} dir(s), ${filesFixed} file(s), ${failures} failure(s) under ${targetDir} in ${Date.now() - startedAt}ms.`
   );
 }
 
-repairStaticPermissions(path.join(__dirname, ".next", "static"));
+repairPermissions(path.join(__dirname, ".next"));
 
 const app = next({ dev, dir: __dirname, hostname, port, turbopack: false });
 const handleRequest = app.getRequestHandler();
