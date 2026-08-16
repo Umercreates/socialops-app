@@ -8,6 +8,7 @@ import { hashPassword, normalizeEmail } from "@/lib/auth/password"
 import { createSession } from "@/lib/auth/session"
 import { recordTestResult } from "@/lib/integrations/repository"
 import { isProviderId } from "@/lib/integrations/providers"
+import { markCallDispatched } from "@/lib/platform/calls"
 import { apiError } from "@/lib/api/errors"
 
 /**
@@ -42,6 +43,11 @@ const actionSchema = z.discriminatedUnion("action", [
     action: z.literal("force-test-pass"),
     workspaceId: z.string().uuid(),
     provider: z.string(),
+  }),
+  z.object({
+    action: z.literal("mark-call-dispatched"),
+    callId: z.string().uuid(),
+    providerCallId: z.string(),
   }),
 ])
 
@@ -92,6 +98,26 @@ export async function POST(request: Request) {
       }
 
       await recordTestResult(body.workspaceId, body.provider, { ok: true, status: "connected" })
+      return NextResponse.json({ ok: true })
+    }
+
+    if (body.action === "mark-call-dispatched") {
+      // Simulates what a real successful dispatchCall() response would do -
+      // the real path can't be reached without a genuine OmniDimension
+      // account, and this is the only way to exercise the webhook's
+      // resolve-by-provider_call_id path (verifying it actually matches and
+      // applies a result) rather than only its "no match" branch.
+      const isFixtureCall = await withDb(async (db) => {
+        const rows = await db.select({ workspaceId: calls.workspaceId }).from(calls).where(eq(calls.id, body.callId)).limit(1)
+        if (!rows[0]) return false
+        const wsRows = await db.select({ slug: workspaces.slug }).from(workspaces).where(eq(workspaces.id, rows[0].workspaceId)).limit(1)
+        return wsRows[0]?.slug.startsWith(FIXTURE_SLUG_PREFIX) ?? false
+      })
+      if (!isFixtureCall) {
+        return NextResponse.json({ error: "Not a fixture call" }, { status: 403 })
+      }
+
+      await markCallDispatched(body.callId, body.providerCallId)
       return NextResponse.json({ ok: true })
     }
 
