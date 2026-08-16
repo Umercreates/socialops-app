@@ -72,3 +72,19 @@ export async function resolveActiveApiKey(
   }
   return resolveCredentialValue(null, "apiKey", provider)
 }
+
+/**
+ * For providers where a real call needs more than one credential field at
+ * once (OmniDimension: apiKey + agentId + fromNumberId together) - same
+ * "No Fake Live Mode" gate as resolveActiveApiKey, just returning the raw
+ * connection row so the caller can resolve whichever fields it needs
+ * without a second round trip. `live` is false for a disabled/unconfigured/
+ * not-yet-activated workspace, same meaning as `mode === "live"` elsewhere.
+ */
+export async function resolveActiveConnection(
+  workspaceId: string,
+  provider: ProviderId
+): Promise<{ live: boolean; row: IntegrationConnectionRow | null }> {
+  const row = await getConnection(workspaceId, provider)
+  return { live: row?.mode === "live", row }
+}

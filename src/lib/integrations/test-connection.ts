@@ -3,6 +3,7 @@ import type { ProviderId } from "./providers"
 import { resolveCredentialValue, type TestConnectionResult } from "./service"
 import { getConnection } from "./repository"
 import { testWhatsAppCredentials } from "./whatsapp/cloud-api"
+import { testOmniDimensionCredentials } from "./omnidimension/client"
 
 /**
  * Provider test-connection dispatcher — the server-side implementation of
@@ -35,6 +36,15 @@ export async function testProviderConnection(workspaceId: string, provider: Prov
         return { ok: false, status: "not_configured", message: "Phone Number ID and access token are both required." }
       }
       return testWhatsAppCredentials(phoneNumberId, accessToken)
+    }
+
+    case "omnidimension": {
+      const { value: apiKey } = resolveCredentialValue(row, "apiKey", provider)
+      const { value: agentId } = resolveCredentialValue(row, "agentId", provider)
+      if (!apiKey || !agentId) {
+        return { ok: false, status: "not_configured", message: "API key and Agent ID are both required." }
+      }
+      return testOmniDimensionCredentials(apiKey, agentId)
     }
 
     default:

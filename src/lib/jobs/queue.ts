@@ -21,6 +21,7 @@ export type JobType =
   | "schedule_post"
   | "qualification"
   | "lead_followup"
+  | "dispatch_call"
 
 export interface EnqueueJobInput {
   workspaceId: string

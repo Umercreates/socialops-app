@@ -9,6 +9,7 @@ import {
   CircleAlert,
   TriangleAlert,
   Workflow,
+  PhoneCall,
   type LucideIcon,
 } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -24,6 +25,7 @@ const TYPE_ICON: Record<NotificationType, LucideIcon> = {
   "publish-failed": CircleAlert,
   "account-warning": TriangleAlert,
   automation: Workflow,
+  "call-completed": PhoneCall,
 }
 
 const TYPE_TONE: Record<NotificationType, string> = {
@@ -33,6 +35,7 @@ const TYPE_TONE: Record<NotificationType, string> = {
   "publish-failed": "bg-destructive/10 text-destructive",
   "account-warning": "bg-warning/15 text-warning-foreground dark:text-warning",
   automation: "bg-muted text-muted-foreground",
+  "call-completed": "bg-success/10 text-success",
 }
 
 interface NotificationPanelProps {

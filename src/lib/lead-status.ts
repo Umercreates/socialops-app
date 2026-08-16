@@ -87,6 +87,12 @@ export const CALL_STATUS_LABEL: Record<CallStatus, string> = {
   "meeting-booked": "Meeting Booked",
   "not-interested": "Not Interested",
   failed: "Failed",
+  queued: "Queued",
+  "pending-approval": "Pending Approval",
+  dispatched: "Dispatched",
+  "in-progress": "In Progress",
+  completed: "Completed",
+  blocked: "Blocked",
 }
 
 export const CALL_STATUS_TONE: Record<CallStatus, StatusTone> = {
@@ -101,6 +107,12 @@ export const CALL_STATUS_TONE: Record<CallStatus, StatusTone> = {
   "meeting-booked": "success",
   "not-interested": "error",
   failed: "error",
+  queued: "neutral",
+  "pending-approval": "warning",
+  dispatched: "info",
+  "in-progress": "warning",
+  completed: "success",
+  blocked: "error",
 }
 
 export const MEETING_STATUS_LABEL: Record<MeetingStatus, string> = {

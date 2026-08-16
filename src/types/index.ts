@@ -226,6 +226,7 @@ export type NotificationType =
   | "publish-failed"
   | "account-warning"
   | "automation"
+  | "call-completed"
 
 export interface Notification {
   id: string
@@ -521,6 +522,15 @@ export type CallStatus =
   | "meeting-booked"
   | "not-interested"
   | "failed"
+  // Real provider-dispatch lifecycle states (added alongside the OmniDimension
+  // backend) - distinct from the outcome states above, which describe how a
+  // completed call went, not whether it was ever placed.
+  | "queued"
+  | "pending-approval"
+  | "dispatched"
+  | "in-progress"
+  | "completed"
+  | "blocked"
 
 export type CallMode = "manual" | "auto-qualified" | "scheduled"
 

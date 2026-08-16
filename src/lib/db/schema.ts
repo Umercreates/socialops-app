@@ -396,3 +396,27 @@ export const providerAnalyticsSnapshots = socialops.table("provider_analytics_sn
   dmVolume: integer("dm_volume"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 })
+
+export const calls = socialops.table("calls", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  leadId: uuid("lead_id"),
+  provider: text("provider").notNull().default("omnidimension"),
+  providerCallId: text("provider_call_id"),
+  toNumber: text("to_number").notNull(),
+  status: text("status").notNull().default("queued"),
+  blockReason: text("block_reason"),
+  requestedByUserId: uuid("requested_by_user_id"),
+  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  dispatchedAt: timestamp("dispatched_at", { withTimezone: true }),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  durationSeconds: integer("duration_seconds"),
+  transcript: jsonb("transcript").notNull().default([]),
+  summary: jsonb("summary"),
+  sentiment: text("sentiment"),
+  extractedVariables: jsonb("extracted_variables").notNull().default({}),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
