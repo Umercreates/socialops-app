@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { and, eq } from "drizzle-orm"
+import { and, eq, inArray } from "drizzle-orm"
 import { withDb } from "@/lib/db/client"
 import { socialAccounts } from "@/lib/db/schema"
 import type { SocialAccount, ConnectionHealth, SocialPlatform } from "@/types"
@@ -25,6 +25,21 @@ export async function listSocialAccounts(workspaceId: string): Promise<SocialAcc
   return withDb(async (db) => {
     const rows = await db.select().from(socialAccounts).where(eq(socialAccounts.workspaceId, workspaceId))
     return rows.map(rowToSocialAccount)
+  })
+}
+
+/** Resolves specific accounts by id, scoped to the workspace - used to
+ * validate a client-supplied target list and to look up each account's
+ * real provider server-side (a post target's provider is never trusted
+ * from client input, only derived from the account record itself). */
+export async function getSocialAccountsByIds(workspaceId: string, ids: string[]): Promise<{ id: string; provider: string }[]> {
+  if (ids.length === 0) return []
+  return withDb(async (db) => {
+    const rows = await db
+      .select({ id: socialAccounts.id, provider: socialAccounts.provider })
+      .from(socialAccounts)
+      .where(and(eq(socialAccounts.workspaceId, workspaceId), inArray(socialAccounts.id, ids)))
+    return rows
   })
 }
 

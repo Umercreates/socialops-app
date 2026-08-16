@@ -6,6 +6,7 @@ import { refreshAccessToken } from "@/lib/integrations/oauth"
 import { resolveActiveConnection } from "@/lib/integrations/credential-resolution"
 import { dispatchCall } from "@/lib/integrations/omnidimension/client"
 import { getCall, markCallDispatched, markCallFailed } from "@/lib/platform/calls"
+import { getPostTarget, markPostTargetResult, recomputePostStatus } from "@/lib/platform/posts"
 
 /**
  * One handler per job type. Every handler that would touch a real external
@@ -91,6 +92,40 @@ async function dispatchCallHandler(job: ClaimedJob): Promise<void> {
   }
 }
 
+/** Resolves one post_target: never publishes without a genuinely live
+ * workspace connection for that target's provider (recording an honest
+ * "blocked" result and rolling the parent post's status up, exactly like
+ * the queue never faking success elsewhere). Publishing itself - the
+ * actual provider API call - has no adapter built yet for any social
+ * provider; a genuinely live connection reaches an honest "not yet
+ * implemented" result rather than a fabricated success, same contract as
+ * every other not-yet-built capability in this file. */
+async function publishPostHandler(job: ClaimedJob): Promise<void> {
+  const targetId = job.payload.targetId as string
+  if (!targetId) throw new Error("publish_post job is missing targetId")
+
+  const target = await getPostTarget(targetId)
+  if (!target) throw new Error(`Post target ${targetId} not found`)
+
+  if (!isProviderId(target.provider)) throw new Error(`Unknown provider: ${target.provider}`)
+
+  const { live } = await resolveActiveConnection(target.workspaceId, target.provider)
+  if (!live) {
+    await markPostTargetResult(targetId, {
+      status: "blocked",
+      errorMessage: `${target.provider} is not connected and activated for this workspace. Configure it in Integrations.`,
+    })
+    await recomputePostStatus(target.workspaceId, target.postId)
+    return
+  }
+
+  await markPostTargetResult(targetId, {
+    status: "failed",
+    errorMessage: `Publishing to ${target.provider} is architecture-ready but has no publish adapter implemented yet.`,
+  })
+  await recomputePostStatus(target.workspaceId, target.postId)
+}
+
 function notYetImplemented(capability: string): JobHandler {
   return async () => {
     throw new Error(`${capability} is architecture-ready but has no live provider connected yet`)
@@ -102,7 +137,7 @@ export const JOB_HANDLERS: Record<JobType, JobHandler> = {
   dispatch_call: dispatchCallHandler,
   provider_webhook: notYetImplemented("Provider webhook processing"),
   send_message: notYetImplemented("Message sending"),
-  publish_post: notYetImplemented("Post publishing"),
+  publish_post: publishPostHandler,
   fetch_analytics: notYetImplemented("Analytics sync"),
   sync_comments: notYetImplemented("Comment sync"),
   sync_messages: notYetImplemented("Message sync"),
