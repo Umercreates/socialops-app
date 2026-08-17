@@ -14,6 +14,7 @@ import { PROVIDER_REGISTRY } from "@/lib/integrations/providers"
 import { cn } from "@/lib/utils"
 import { FacebookPageSelector } from "./facebook-page-selector"
 import { GoogleSheetsPicker } from "./google-sheets-picker"
+import { GoogleCalendarSelector } from "./google-calendar-selector"
 
 interface ProviderDetailSheetProps {
   provider: ProviderConnectionView | null
@@ -239,6 +240,10 @@ export function ProviderDetailSheet({ provider, canManage, open, onOpenChange, o
 
           {provider.provider === "google-sheets" && provider.readiness.oauthComplete && (
             <GoogleSheetsPicker canManage={canManage} />
+          )}
+
+          {provider.provider === "google-calendar" && provider.readiness.oauthComplete && (
+            <GoogleCalendarSelector canManage={canManage} />
           )}
 
           {webhookUrl && (

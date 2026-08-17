@@ -349,14 +349,17 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     id: "google-calendar",
     name: "Google Calendar",
     category: "productivity",
-    description: "Meeting scheduling sync - not yet implemented beyond the connection itself.",
+    description: "Real meeting scheduling: list calendars, check availability, create events with Google Meet links, and update/cancel them.",
     capabilities: ["oauth", "calendar"],
     credentialFields: OAUTH_APP_FIELDS,
     supportedModes: ["demo", "live"],
     requiresOAuth: true,
     oauth: {
       ...GOOGLE_OAUTH_BASE,
-      scopes: ["https://www.googleapis.com/auth/calendar.events"],
+      // The full calendar scope, not just calendar.events - listing which
+      // calendars exist (calendarList) and checking availability
+      // (freeBusy) aren't covered by calendar.events alone.
+      scopes: ["https://www.googleapis.com/auth/calendar"],
       platformAppEnvVars: { clientId: ["GOOGLE_PLATFORM_CLIENT_ID", "GOOGLE_CLIENT_ID"], clientSecret: ["GOOGLE_PLATFORM_CLIENT_SECRET", "GOOGLE_CLIENT_SECRET"] },
     },
     requiresWebhook: false,

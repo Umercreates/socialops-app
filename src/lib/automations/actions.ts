@@ -7,6 +7,7 @@ import { enqueueJob } from "@/lib/jobs/queue"
 import { sendWhatsAppTextMessage } from "@/lib/integrations/whatsapp/cloud-api"
 import { insertOutboundMessage, updateConversation } from "@/lib/integrations/whatsapp/repository"
 import { syncLeadToSheet } from "@/lib/integrations/google-sheets/sync"
+import { bookMeeting } from "@/lib/integrations/google-calendar/booking"
 import type { AutomationActionType } from "@/types"
 
 /**
@@ -167,6 +168,42 @@ async function syncSheetRow(ctx: ActionContext): Promise<ActionResult> {
   return { status: "completed" }
 }
 
+/** No scheduling-configuration UI exists yet for this action, so it books
+ * a sensible default: 24 hours out, 30 minutes, titled after the lead,
+ * with the lead's own email invited if one is on file. Blocked (not
+ * failed) when Google Calendar isn't connected/selected - an honest setup
+ * gap, not an error. */
+async function createMeetingAction(ctx: ActionContext): Promise<ActionResult> {
+  if (!ctx.leadId) return blocked("No lead associated with this event.")
+  const lead = await getLead(ctx.workspaceId, ctx.leadId)
+  if (!lead) return blocked("Lead not found.")
+
+  const start = new Date(Date.now() + 24 * 60 * 60 * 1000)
+  const end = new Date(start.getTime() + 30 * 60 * 1000)
+
+  const result = await bookMeeting({
+    workspaceId: ctx.workspaceId,
+    leadId: lead.id,
+    title: `Meeting with ${lead.name}`,
+    startTime: start.toISOString(),
+    endTime: end.toISOString(),
+    attendeeEmails: lead.email ? [lead.email] : [],
+    createdByUserId: ctx.actorUserId,
+  })
+
+  if (result.status === "blocked") return blocked(result.errorMessage ?? "Google Calendar is not ready for this workspace.")
+  if (result.status === "failed") return { status: "failed", errorMessage: result.errorMessage ?? "Meeting creation failed" }
+
+  await createActivity(ctx.workspaceId, ctx.leadId, ctx.actorUserId, "note-added", `Meeting auto-scheduled for ${start.toLocaleString()}.`)
+  await createNotification({
+    workspaceId: ctx.workspaceId,
+    type: "automation",
+    title: "Meeting scheduled",
+    description: `A meeting with ${lead.name} was booked automatically.`,
+  })
+  return { status: "completed" }
+}
+
 function notYetImplemented(capability: string): () => Promise<ActionResult> {
   return async () => blocked(`${capability} is architecture-ready but has no live provider connected yet.`)
 }
@@ -198,7 +235,7 @@ export async function executeAction(actionType: AutomationActionType, actionValu
     case "add-tag":
       return notYetImplemented("Tagging")()
     case "create-meeting":
-      return notYetImplemented("Meeting booking")()
+      return createMeetingAction(ctx)
     case "add-sheet-row":
     case "update-sheet-row":
       return syncSheetRow(ctx)

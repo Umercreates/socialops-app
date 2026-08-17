@@ -459,3 +459,25 @@ export const googleSheetsSyncedRows = socialops.table("google_sheets_synced_rows
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 })
+
+export const meetings = socialops.table("meetings", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  leadId: uuid("lead_id"),
+  title: text("title").notNull(),
+  description: text("description"),
+  startTime: timestamp("start_time", { withTimezone: true }).notNull(),
+  endTime: timestamp("end_time", { withTimezone: true }).notNull(),
+  timezone: text("timezone").notNull(),
+  attendeeEmails: text("attendee_emails").array().notNull().default([]),
+  assignedToUserId: uuid("assigned_to_user_id"),
+  status: text("status").notNull().default("scheduled"),
+  calendarId: text("calendar_id"),
+  externalEventId: text("external_event_id"),
+  eventUrl: text("event_url"),
+  meetLink: text("meet_link"),
+  errorMessage: text("error_message"),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
