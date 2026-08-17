@@ -422,6 +422,18 @@ export const calls = socialops.table("calls", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 })
 
+export const mediaAssets = socialops.table("media_assets", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  storageKey: text("storage_key").notNull(),
+  mediaType: text("media_type").notNull(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  originalFilename: text("original_filename").notNull(),
+  uploadedByUserId: uuid("uploaded_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
 export const googleSheetsSelections = socialops.table("google_sheets_selections", {
   id: uuid("id").primaryKey(),
   workspaceId: uuid("workspace_id").notNull().unique(),

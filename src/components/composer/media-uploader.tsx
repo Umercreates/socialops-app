@@ -1,27 +1,73 @@
 "use client"
 
 import * as React from "react"
-import { ImagePlus, X as XIcon, Film } from "lucide-react"
+import { ImagePlus, X as XIcon, Film, Loader2 } from "lucide-react"
 import type { PostMedia } from "@/types"
 import { cn } from "@/lib/utils"
 
 interface MediaUploaderProps {
   media: PostMedia[]
   onChange: (media: PostMedia[]) => void
+  onUploadingChange?: (uploading: boolean) => void
 }
 
-export function MediaUploader({ media, onChange }: MediaUploaderProps) {
-  const inputRef = React.useRef<HTMLInputElement>(null);
+const MAX_FILES = 6
+
+/** Each attached file uploads to /api/media immediately on selection - the
+ * item appears right away using a local object URL for instant preview,
+ * then swaps to the real /api/media/{id}/file URL (and gains
+ * mediaAssetId) once the upload finishes. A failed upload removes its
+ * item and surfaces the server's reason rather than leaving a
+ * never-publishable placeholder in the post. */
+export function MediaUploader({ media, onChange, onUploadingChange }: MediaUploaderProps) {
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  const [uploadingIds, setUploadingIds] = React.useState<Set<string>>(new Set())
+  const [error, setError] = React.useState<string | null>(null)
+  const mediaRef = React.useRef(media)
+  React.useEffect(() => {
+    mediaRef.current = media
+  }, [media])
+
+  React.useEffect(() => {
+    onUploadingChange?.(uploadingIds.size > 0)
+  }, [uploadingIds, onUploadingChange])
+
+  async function uploadOne(item: PostMedia, file: File) {
+    try {
+      const form = new FormData()
+      form.append("file", file)
+      const res = await fetch("/api/media", { method: "POST", credentials: "same-origin", body: form })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Upload failed")
+
+      if (item.url.startsWith("blob:")) URL.revokeObjectURL(item.url)
+      onChange(mediaRef.current.map((m) => (m.id === item.id ? { ...m, url: data.url, mediaAssetId: data.id } : m)))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed")
+      onChange(mediaRef.current.filter((m) => m.id !== item.id))
+    } finally {
+      setUploadingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(item.id)
+        return next
+      })
+    }
+  }
 
   function handleFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return
-    const next: PostMedia[] = Array.from(fileList).map((file) => ({
+    setError(null)
+    const room = MAX_FILES - media.length
+    const files = Array.from(fileList).slice(0, Math.max(room, 0))
+    const next: PostMedia[] = files.map((file) => ({
       id: `media_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       type: file.type.startsWith("video") ? "video" : "image",
       url: URL.createObjectURL(file),
       name: file.name,
     }))
     onChange([...media, ...next])
+    setUploadingIds((prev) => new Set([...prev, ...next.map((m) => m.id)]))
+    next.forEach((item, i) => uploadOne(item, files[i]))
   }
 
   function removeMedia(id: string) {
@@ -35,7 +81,7 @@ export function MediaUploader({ media, onChange }: MediaUploaderProps) {
       <input
         ref={inputRef}
         type="file"
-        accept="image/*,video/*"
+        accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime"
         multiple
         className="hidden"
         onChange={(event) => {
@@ -59,7 +105,7 @@ export function MediaUploader({ media, onChange }: MediaUploaderProps) {
         >
           <ImagePlus className="size-5" strokeWidth={1.75} />
           <span className="text-sm font-medium">Click or drop images/video</span>
-          <span className="text-xs text-muted-foreground/70">PNG, JPG, MP4 — up to 6 files</span>
+          <span className="text-xs text-muted-foreground/70">JPG, PNG, WebP, GIF, MP4, MOV — up to 6 files</span>
         </button>
       ) : (
         <div className="grid grid-cols-4 gap-2">
@@ -70,6 +116,11 @@ export function MediaUploader({ media, onChange }: MediaUploaderProps) {
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={item.url} alt={item.name} className="size-full object-cover" />
+              )}
+              {uploadingIds.has(item.id) && (
+                <span className="absolute inset-0 flex items-center justify-center bg-black/40">
+                  <Loader2 className="size-4 animate-spin text-white" />
+                </span>
               )}
               {item.type === "video" && (
                 <span className="absolute bottom-1 left-1 flex size-4 items-center justify-center rounded bg-black/60 text-white">
@@ -86,7 +137,7 @@ export function MediaUploader({ media, onChange }: MediaUploaderProps) {
               </button>
             </div>
           ))}
-          {media.length < 6 && (
+          {media.length < MAX_FILES && (
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
@@ -98,6 +149,7 @@ export function MediaUploader({ media, onChange }: MediaUploaderProps) {
           )}
         </div>
       )}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   )
 }

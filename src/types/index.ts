@@ -56,9 +56,17 @@ export type MediaType = "image" | "video"
 export interface PostMedia {
   id: string
   type: MediaType
-  /** Object URL (client-picked file) or a static placeholder asset. */
+  /** Object URL (client-picked file, before upload finishes), a static
+   * placeholder asset (demo mode), or /api/media/{mediaAssetId}/file (a
+   * real, server-persisted upload) - only the last one is ever safe to
+   * treat as publishable by a server-side job. */
   url: string
   name: string
+  /** Set once this file has actually finished uploading to server-side
+   * storage - undefined while still uploading, or for a demo/placeholder
+   * entry that was never a real upload. A provider publish adapter must
+   * never attempt to publish a PostMedia entry that lacks this. */
+  mediaAssetId?: string
 }
 
 export interface PostVariant {

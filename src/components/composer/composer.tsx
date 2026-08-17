@@ -57,6 +57,7 @@ export function Composer() {
   const [baseCaption, setBaseCaption] = React.useState("")
   const [baseHashtags, setBaseHashtags] = React.useState("")
   const [media, setMedia] = React.useState<PostMedia[]>([])
+  const [mediaUploading, setMediaUploading] = React.useState(false)
   const [selected, setSelected] = React.useState<Set<SocialPlatform>>(new Set(["instagram"]))
   const [activeTab, setActiveTab] = React.useState<SocialPlatform>("instagram")
   const [variants, setVariants] = React.useState<Record<SocialPlatform, ComposerVariantState>>(
@@ -183,7 +184,7 @@ export function Composer() {
   }
 
   const isBusy = flow === "saving-draft" || flow === "scheduling" || flow === "preparing" || flow === "publishing"
-  const canSubmit = selectedPlatforms.length > 0 && (baseCaption.trim().length > 0 || media.length > 0)
+  const canSubmit = selectedPlatforms.length > 0 && (baseCaption.trim().length > 0 || media.length > 0) && !mediaUploading
   const hasConnectedSelection = selectedPlatforms.some((p) => connectedPlatforms.has(p))
 
   if (flow === "done" && resultLink) {
@@ -226,7 +227,7 @@ export function Composer() {
         <div className="flex flex-col gap-5">
           <Card className="gap-4 px-4 py-4 sm:px-5 sm:py-5">
             <Label>Media</Label>
-            <MediaUploader media={media} onChange={setMedia} />
+            <MediaUploader media={media} onChange={setMedia} onUploadingChange={setMediaUploading} />
           </Card>
 
           <Card className="gap-4 px-4 py-4 sm:px-5 sm:py-5">
@@ -285,7 +286,10 @@ export function Composer() {
               {flow === "preparing" || flow === "publishing" ? <Loader2 className="animate-spin" /> : <Send />}
               {flow === "preparing" ? "Preparing…" : flow === "publishing" ? "Publishing…" : "Publish now"}
             </Button>
-            {!canSubmit && (
+            {mediaUploading && (
+              <p className="w-full text-xs text-muted-foreground">Waiting for media to finish uploading…</p>
+            )}
+            {!mediaUploading && !canSubmit && (
               <p className="w-full text-xs text-muted-foreground">
                 Add a caption or media and select at least one platform to continue.
               </p>
