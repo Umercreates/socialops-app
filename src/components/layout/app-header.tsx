@@ -13,7 +13,6 @@ import { UserMenu } from "@/components/layout/user-menu"
 import { useSidebar } from "@/components/layout/sidebar-context"
 import { useSocialAccounts } from "@/lib/store/accounts-store"
 import { ALL_NAV_ITEMS } from "@/lib/nav-config"
-import type { Notification } from "@/types"
 
 function useActiveSectionTitle() {
   const pathname = usePathname()
@@ -24,11 +23,7 @@ function useActiveSectionTitle() {
   return match?.title ?? "Dashboard"
 }
 
-interface AppHeaderProps {
-  notifications: Notification[]
-}
-
-export function AppHeader({ notifications }: AppHeaderProps) {
+export function AppHeader() {
   const { setIsMobileOpen } = useSidebar()
   const sectionTitle = useActiveSectionTitle()
   const { accounts } = useSocialAccounts()
@@ -85,7 +80,7 @@ export function AppHeader({ notifications }: AppHeaderProps) {
           <Plus />
         </Button>
 
-        <NotificationPanel initialNotifications={notifications} />
+        <NotificationPanel />
 
         {/* Desktop shows the account menu in the sidebar footer; the header
          * only needs it while that sidebar is a closed mobile drawer. */}

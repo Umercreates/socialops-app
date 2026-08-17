@@ -6,16 +6,14 @@ import { MobileSidebar } from "@/components/layout/mobile-sidebar"
 import { AppHeader } from "@/components/layout/app-header"
 import { MockDataProvider } from "@/lib/store/mock-data-provider"
 import { DemoModeProvider } from "@/lib/demo-mode-context"
-import type { Notification } from "@/types"
 
 interface DashboardShellProps {
   children: React.ReactNode
-  notifications: Notification[]
   crmMode?: "demo" | "database"
   demoMode?: boolean
 }
 
-export function DashboardShell({ children, notifications, crmMode = "demo", demoMode = true }: DashboardShellProps) {
+export function DashboardShell({ children, crmMode = "demo", demoMode = true }: DashboardShellProps) {
   return (
     <DemoModeProvider demoMode={demoMode}>
       <MockDataProvider crmMode={crmMode}>
@@ -24,7 +22,7 @@ export function DashboardShell({ children, notifications, crmMode = "demo", demo
             <AppSidebar />
             <MobileSidebar />
             <div className="flex min-w-0 flex-1 flex-col">
-              <AppHeader notifications={notifications} />
+              <AppHeader />
               <main className="flex flex-1 flex-col">{children}</main>
             </div>
           </div>

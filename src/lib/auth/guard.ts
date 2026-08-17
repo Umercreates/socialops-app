@@ -1,3 +1,4 @@
+import { cache } from "react"
 import { cookies, headers } from "next/headers"
 import { NextResponse } from "next/server"
 import { eq, and } from "drizzle-orm"
@@ -39,8 +40,16 @@ function serviceUnavailable(): GuardResult {
 /** Resolves the authenticated user + their active workspace membership from
  * the session cookie. Always fails closed: any DB error, missing session,
  * revoked session, or missing membership returns `ok: false`, never a
- * default/fake identity. */
-export async function requireAuth(): Promise<GuardResult> {
+ * default/fake identity.
+ *
+ * Wrapped in React's request-scoped `cache()`: the dashboard layout and
+ * every page/component under it independently call this (per Phase 2's
+ * "every sensitive read re-verifies" rule), which previously meant the same
+ * session+user+workspace join query ran twice per page load. `cache()`
+ * memoizes the result only for the lifetime of this one request/render -
+ * it is NOT a cross-request or cross-user cache, so no auth data ever
+ * leaks between requests. */
+export const requireAuth = cache(async (): Promise<GuardResult> => {
   if (process.env.AUTH_MODE !== "production") {
     return unauthorized("Production authentication is not yet enabled")
   }
@@ -89,7 +98,7 @@ export async function requireAuth(): Promise<GuardResult> {
   } catch {
     return serviceUnavailable()
   }
-}
+})
 
 /** Reusable role gate — keeps authorization centralized instead of scattered
  * `if (role === ...)` checks throughout route handlers. */

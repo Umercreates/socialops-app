@@ -1,7 +1,6 @@
 import { SOCIAL_ACCOUNTS } from "@/lib/data/accounts"
 import { SCHEDULED_POSTS, SCHEDULED_POSTS_TOTAL, POSTS_PUBLISHED_30D } from "@/lib/data/posts"
 import { ACTIVITY_FEED } from "@/lib/data/activity"
-import { NOTIFICATIONS } from "@/lib/data/notifications"
 import {
   getEngagementTotals,
   getEngagementRate,
@@ -14,7 +13,6 @@ import type {
   DateRangeOption,
   EngagementPoint,
   EngagementTotals,
-  Notification,
   Post,
   SocialAccount,
 } from "@/types"
@@ -71,10 +69,6 @@ export async function getUpcomingPosts(limit = 5): Promise<Post[]> {
 
 export async function getActivityFeed(limit = 6): Promise<ActivityItem[]> {
   return resolveAfterDelay(ACTIVITY_FEED.slice(0, limit))
-}
-
-export async function getNotifications(): Promise<Notification[]> {
-  return resolveAfterDelay(NOTIFICATIONS)
 }
 
 export interface EngagementOverview {
