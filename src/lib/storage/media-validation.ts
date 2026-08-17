@@ -14,6 +14,11 @@ const ALLOWED_TYPES: Record<string, { extension: string; mediaType: "image" | "v
   "video/quicktime": { extension: ".mov", mediaType: "video", maxBytes: 100 * 1024 * 1024 },
 }
 
+/** The largest any single allowed type permits - used to reject an
+ * obviously-oversized request by its Content-Length header before the
+ * body is ever read into memory, not just after. */
+export const MAX_UPLOAD_BYTES = Math.max(...Object.values(ALLOWED_TYPES).map((rule) => rule.maxBytes))
+
 export interface MediaValidationResult {
   ok: boolean
   error?: string

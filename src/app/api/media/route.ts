@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@/lib/auth/guard"
 import { verifySameOrigin } from "@/lib/auth/csrf"
-import { validateUpload } from "@/lib/storage/media-validation"
+import { validateUpload, MAX_UPLOAD_BYTES } from "@/lib/storage/media-validation"
 import { getStorageAdapter } from "@/lib/storage/local-adapter"
 import { createMediaAsset } from "@/lib/platform/media"
 import { apiError } from "@/lib/api/errors"
@@ -18,6 +18,16 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.response
     const roleCheck = requireRole(auth.ctx, ["owner", "admin", "manager"])
     if (roleCheck) return roleCheck
+
+    // Rejects an oversized request from its Content-Length header before
+    // request.formData() ever buffers the body into memory - on a 1GB host,
+    // there's no reason to read a multi-hundred-MB request just to reject
+    // it after the fact. A small multipart-overhead margin above the
+    // largest real upload type's own cap avoids false rejections.
+    const declaredLength = Number(request.headers.get("content-length") ?? 0)
+    if (declaredLength > MAX_UPLOAD_BYTES + 1024 * 1024) {
+      return NextResponse.json({ error: "File is too large." }, { status: 413 })
+    }
 
     const form = await request.formData().catch(() => null)
     const file = form?.get("file")
