@@ -23,6 +23,7 @@ export type JobType =
   | "lead_followup"
   | "dispatch_call"
   | "instagram_poll_publish"
+  | "tiktok_poll_publish"
 
 export interface EnqueueJobInput {
   workspaceId: string

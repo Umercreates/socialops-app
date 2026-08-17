@@ -218,7 +218,8 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     id: "tiktok",
     name: "TikTok",
     category: "social",
-    description: "TikTok publishing - not yet implemented beyond the connection itself.",
+    description:
+      "TikTok video and photo publishing is real, but until this app passes TikTok's content audit, every publish lands as private-only (SELF_ONLY) regardless of the privacy level requested - a provider restriction, not a software gap.",
     capabilities: ["oauth", "publishing"],
     credentialFields: OAUTH_APP_FIELDS,
     supportedModes: ["demo", "live"],
@@ -262,7 +263,8 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     id: "x",
     name: "X (Twitter)",
     category: "social",
-    description: "X publishing - not yet implemented beyond the connection itself.",
+    description:
+      "X text and media publishing is real, but X's API has no free tier for posting - this app's X developer account needs billing/credits configured before any publish will succeed.",
     capabilities: ["oauth", "publishing"],
     credentialFields: OAUTH_APP_FIELDS,
     supportedModes: ["demo", "live"],
@@ -281,7 +283,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     id: "youtube",
     name: "YouTube",
     category: "social",
-    description: "YouTube publishing via Google OAuth - not yet implemented beyond the connection itself.",
+    description: "Real YouTube video upload (resumable protocol) via the same Google OAuth connection as Sheets and Calendar.",
     capabilities: ["oauth", "publishing", "analytics"],
     credentialFields: OAUTH_APP_FIELDS,
     supportedModes: ["demo", "live"],

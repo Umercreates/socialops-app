@@ -14,6 +14,9 @@ import {
   publishInstagramVideoContainer,
 } from "@/lib/integrations/instagram/client"
 import { createPost as createLinkedInPost, uploadImage as uploadLinkedInImage, uploadVideo as uploadLinkedInVideo } from "@/lib/integrations/linkedin/client"
+import { getCreatorInfo, publishVideo as publishTikTokVideo, publishPhoto as publishTikTokPhoto, checkPublishStatus as checkTikTokStatus } from "@/lib/integrations/tiktok/client"
+import { uploadVideo as uploadYouTubeVideo } from "@/lib/integrations/youtube/client"
+import { createPost as createXPost, uploadMedia as uploadXMedia, checkMediaStatus as checkXMediaStatus } from "@/lib/integrations/x/client"
 import { getCall, markCallDispatched, markCallFailed } from "@/lib/platform/calls"
 import { getPost, getPostTarget, markPostTargetResult, recomputePostStatus, type PostTargetRow } from "@/lib/platform/posts"
 import { getMediaAsset } from "@/lib/platform/media"
@@ -219,6 +222,190 @@ async function publishToLinkedIn(
   return { status: "published", externalPostId: result.externalPostId }
 }
 
+/** TikTok requires media (there's no text-only post concept) and always
+ * publishes asynchronously - this creates the publish attempt and hands
+ * off to tiktok_poll_publish, same pattern as Instagram video. Privacy
+ * level is chosen from creator_info's own privacyLevelOptions (preferring
+ * public if this app's audit status allows it) rather than assumed. */
+async function publishToTikTok(
+  target: PostTargetRow,
+  row: Awaited<ReturnType<typeof resolveActiveConnection>>["row"]
+): Promise<{ status: "published" | "failed" | "blocked" | "processing"; externalPostId?: string; errorMessage?: string }> {
+  const { value: accessToken } = resolveCredentialValue(row, "accessToken", "tiktok")
+  if (!accessToken) return { status: "blocked", errorMessage: "TikTok isn't connected for this workspace - connect it in Integrations." }
+
+  const post = await getPost(target.workspaceId, target.postId)
+  if (!post) return { status: "failed", errorMessage: "Parent post no longer exists." }
+  if (post.media.length === 0) return { status: "blocked", errorMessage: "TikTok requires an attached image or video - text-only posts aren't supported." }
+  if (post.media.length > 1) return { status: "blocked", errorMessage: "TikTok publishing supports at most one attached image or video right now." }
+
+  const media = post.media[0]
+  if (!media.mediaAssetId) return { status: "blocked", errorMessage: "This post's attached media hasn't finished uploading - try publishing again in a moment." }
+  const asset = await getMediaAsset(target.workspaceId, media.mediaAssetId)
+  if (!asset) return { status: "failed", errorMessage: "The attached media file no longer exists." }
+
+  const creatorInfo = await getCreatorInfo(accessToken)
+  if (!creatorInfo.ok) return { status: "failed", errorMessage: creatorInfo.errorMessage ?? "Couldn't reach TikTok's creator info API." }
+  const privacyLevel = creatorInfo.privacyLevelOptions?.includes("PUBLIC_TO_EVERYONE") ? "PUBLIC_TO_EVERYONE" : (creatorInfo.privacyLevelOptions?.[0] ?? "SELF_ONLY")
+
+  const variant = post.variants.find((v) => v.platform === "tiktok" && v.enabled)
+  const title = variant ? [variant.caption, variant.hashtags].filter(Boolean).join(" ") : [post.baseCaption, post.baseHashtags].filter(Boolean).join(" ")
+
+  let publishResult: { ok: boolean; publishId?: string; errorMessage?: string }
+  if (asset.mediaType === "video") {
+    const buffer = await getStorageAdapter().read(asset.storageKey)
+    if (!buffer) return { status: "failed", errorMessage: "The attached media file's content couldn't be read." }
+    publishResult = await publishTikTokVideo(accessToken, buffer, title, privacyLevel)
+  } else {
+    const photoUrl = buildPublicMediaUrl(requireAppOrigin(), asset.id)
+    publishResult = await publishTikTokPhoto(accessToken, photoUrl, title, privacyLevel)
+  }
+  if (!publishResult.ok || !publishResult.publishId) return { status: "failed", errorMessage: publishResult.errorMessage ?? "TikTok publish failed" }
+
+  await enqueueJob({
+    workspaceId: target.workspaceId,
+    type: "tiktok_poll_publish",
+    payload: { targetId: target.id, publishId: publishResult.publishId },
+    availableAt: new Date(Date.now() + 60000),
+    maxAttempts: 6,
+  })
+  return { status: "processing" }
+}
+
+/** Polls one TikTok publish attempt - same job-queue-backoff pattern as
+ * instagramPollPublishHandler, since TikTok's own recommended cadence
+ * (~45s) is close enough to this queue's starting backoff (2 minutes)
+ * that a second scheduling mechanism isn't worth adding. */
+async function tiktokPollPublishHandler(job: ClaimedJob): Promise<void> {
+  const targetId = job.payload.targetId as string
+  const publishId = job.payload.publishId as string
+  if (!targetId || !publishId) throw new Error("tiktok_poll_publish job is missing required fields")
+
+  const row = await getConnection(job.workspaceId, "tiktok")
+  const { value: accessToken } = resolveCredentialValue(row, "accessToken", "tiktok")
+  if (!accessToken) {
+    await markPostTargetResult(targetId, { status: "failed", errorMessage: "TikTok is no longer connected - publish couldn't complete." })
+    const target = await getPostTarget(targetId)
+    if (target) await recomputePostStatus(target.workspaceId, target.postId)
+    return
+  }
+
+  const statusResult = await checkTikTokStatus(accessToken, publishId)
+
+  async function finish(result: { status: "published" | "failed"; externalPostId?: string; errorMessage?: string }) {
+    await markPostTargetResult(targetId, result)
+    const target = await getPostTarget(targetId)
+    if (target) await recomputePostStatus(target.workspaceId, target.postId)
+  }
+
+  if (statusResult.ok && statusResult.status === "PUBLISH_COMPLETE") {
+    await finish({ status: "published", externalPostId: statusResult.externalPostId })
+    return
+  }
+  if (statusResult.ok && statusResult.status === "FAILED") {
+    await finish({ status: "failed", errorMessage: statusResult.errorMessage ?? "TikTok publish failed." })
+    return
+  }
+
+  const isFinalAttempt = job.attempts >= job.maxAttempts
+  if (isFinalAttempt) {
+    await finish({ status: "failed", errorMessage: "TikTok processing didn't finish in time - try publishing again later." })
+  }
+  throw new Error(statusResult.errorMessage ?? `TikTok publish still processing (status: ${statusResult.status ?? "unknown"})`)
+}
+
+/** YouTube has no text-only concept either - every upload is a video. No
+ * async polling needed: the resumable upload's own PUT response is the
+ * final result (unlike Instagram/TikTok, YouTube doesn't separate
+ * "uploaded" from "processed" at the API level for this purpose). */
+async function publishToYouTube(
+  target: PostTargetRow,
+  row: Awaited<ReturnType<typeof resolveActiveConnection>>["row"]
+): Promise<{ status: "published" | "failed" | "blocked"; externalPostId?: string; errorMessage?: string }> {
+  const { value: accessToken } = resolveCredentialValue(row, "accessToken", "youtube")
+  if (!accessToken) return { status: "blocked", errorMessage: "YouTube isn't connected for this workspace - connect it in Integrations." }
+
+  const post = await getPost(target.workspaceId, target.postId)
+  if (!post) return { status: "failed", errorMessage: "Parent post no longer exists." }
+  if (post.media.length === 0) return { status: "blocked", errorMessage: "YouTube requires an attached video - text-only and image-only posts aren't supported." }
+  if (post.media.length > 1) return { status: "blocked", errorMessage: "YouTube publishing supports at most one attached video per post." }
+
+  const media = post.media[0]
+  if (!media.mediaAssetId) return { status: "blocked", errorMessage: "This post's attached media hasn't finished uploading - try publishing again in a moment." }
+  const asset = await getMediaAsset(target.workspaceId, media.mediaAssetId)
+  if (!asset) return { status: "failed", errorMessage: "The attached media file no longer exists." }
+  if (asset.mediaType !== "video") return { status: "blocked", errorMessage: "YouTube only accepts video uploads - the attached file is an image." }
+
+  const buffer = await getStorageAdapter().read(asset.storageKey)
+  if (!buffer) return { status: "failed", errorMessage: "The attached media file's content couldn't be read." }
+
+  const variant = post.variants.find((v) => v.platform === "youtube" && v.enabled)
+  const title = (variant?.title || variant?.caption || post.title || post.baseCaption || "Untitled").slice(0, 100)
+  const description = variant ? [variant.caption, variant.hashtags].filter(Boolean).join("\n\n") : [post.baseCaption, post.baseHashtags].filter(Boolean).join("\n\n")
+
+  const result = await uploadYouTubeVideo(accessToken, { buffer, mimeType: asset.mimeType, title, description, privacyStatus: "public" })
+  if (!result.ok) return { status: "failed", errorMessage: result.errorMessage ?? "YouTube upload failed" }
+  return { status: "published", externalPostId: result.externalVideoId }
+}
+
+/** X: text-only or text + a single image/video, posted as whichever
+ * account authorized the app (X has no organization/Page concept to pick
+ * between). Video/GIF media needs a processing-status check after
+ * FINALIZE; images are checked too for consistency but resolve
+ * immediately in practice. */
+async function publishToX(
+  target: PostTargetRow,
+  row: Awaited<ReturnType<typeof resolveActiveConnection>>["row"]
+): Promise<{ status: "published" | "failed" | "blocked"; externalPostId?: string; errorMessage?: string }> {
+  const { value: accessToken } = resolveCredentialValue(row, "accessToken", "x")
+  if (!accessToken) return { status: "blocked", errorMessage: "X isn't connected for this workspace - connect it in Integrations." }
+
+  const post = await getPost(target.workspaceId, target.postId)
+  if (!post) return { status: "failed", errorMessage: "Parent post no longer exists." }
+  if (post.media.length > 1) return { status: "blocked", errorMessage: "X publishing supports at most one attached image or video per post right now." }
+
+  const variant = post.variants.find((v) => v.platform === "x" && v.enabled)
+  const message = variant
+    ? [variant.caption, variant.hashtags].filter(Boolean).join("\n\n")
+    : [post.baseCaption, post.baseHashtags].filter(Boolean).join("\n\n")
+
+  let mediaIds: string[] | undefined
+  if (post.media.length === 1) {
+    const media = post.media[0]
+    if (!media.mediaAssetId) return { status: "blocked", errorMessage: "This post's attached media hasn't finished uploading - try publishing again in a moment." }
+    const asset = await getMediaAsset(target.workspaceId, media.mediaAssetId)
+    if (!asset) return { status: "failed", errorMessage: "The attached media file no longer exists." }
+    const buffer = await getStorageAdapter().read(asset.storageKey)
+    if (!buffer) return { status: "failed", errorMessage: "The attached media file's content couldn't be read." }
+
+    const upload = await uploadXMedia(accessToken, buffer, asset.mimeType, asset.mediaType === "video")
+    if (!upload.ok || !upload.mediaId) return { status: "failed", errorMessage: upload.errorMessage ?? "X media upload failed" }
+
+    if (asset.mediaType === "video") {
+      // Poll inline here rather than via the job queue: X's processing is
+      // typically fast for the modest file sizes this app supports, and
+      // adding a third async-poll job type for one provider wasn't worth
+      // the duplication - a genuinely slow case still resolves as an
+      // honest failure below rather than hanging.
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const status = await checkXMediaStatus(accessToken, upload.mediaId)
+        if (!status.ok) return { status: "failed", errorMessage: status.errorMessage ?? "Couldn't check X media processing status." }
+        if (status.state === "succeeded") break
+        if (status.state === "failed") return { status: "failed", errorMessage: status.errorMessage ?? "X media processing failed." }
+        if (attempt === 4) return { status: "failed", errorMessage: "X media processing didn't finish in time." }
+        await new Promise((resolve) => setTimeout(resolve, 3000))
+      }
+    }
+
+    mediaIds = [upload.mediaId]
+  }
+
+  if (!message.trim() && !mediaIds) return { status: "failed", errorMessage: "This post has no caption to publish." }
+  const result = await createXPost(accessToken, message, mediaIds)
+  if (!result.ok) return { status: "failed", errorMessage: result.errorMessage ?? "X publish failed" }
+  return { status: "published", externalPostId: result.externalPostId }
+}
+
 /** Instagram professional accounts are always linked through a Facebook
  * Page - there is no separate Instagram credential to check here, so this
  * deliberately resolves the Facebook connection instead of Instagram's
@@ -378,12 +565,26 @@ async function publishPostHandler(job: ClaimedJob): Promise<void> {
     return
   }
 
-  const result =
-    target.provider === "facebook"
-      ? await publishToFacebook(target, row)
-      : target.provider === "linkedin"
-        ? await publishToLinkedIn(target, row)
-        : { status: "failed" as const, errorMessage: `Publishing to ${target.provider} is architecture-ready but has no publish adapter implemented yet.` }
+  let result: { status: "published" | "failed" | "blocked" | "processing"; externalPostId?: string; errorMessage?: string }
+  switch (target.provider) {
+    case "facebook":
+      result = await publishToFacebook(target, row)
+      break
+    case "linkedin":
+      result = await publishToLinkedIn(target, row)
+      break
+    case "tiktok":
+      result = await publishToTikTok(target, row)
+      break
+    case "youtube":
+      result = await publishToYouTube(target, row)
+      break
+    case "x":
+      result = await publishToX(target, row)
+      break
+    default:
+      result = { status: "failed", errorMessage: `Publishing to ${target.provider} is architecture-ready but has no publish adapter implemented yet.` }
+  }
 
   await markPostTargetResult(targetId, result)
   await recomputePostStatus(target.workspaceId, target.postId)
@@ -408,4 +609,5 @@ export const JOB_HANDLERS: Record<JobType, JobHandler> = {
   qualification: notYetImplemented("Standalone qualification job"),
   lead_followup: notYetImplemented("Lead follow-up"),
   instagram_poll_publish: instagramPollPublishHandler,
+  tiktok_poll_publish: tiktokPollPublishHandler,
 }
