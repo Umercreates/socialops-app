@@ -5,8 +5,9 @@ import { resolveCredentialValue, storeOAuthTokens } from "@/lib/integrations/ser
 import { refreshAccessToken } from "@/lib/integrations/oauth"
 import { resolveActiveConnection } from "@/lib/integrations/credential-resolution"
 import { dispatchCall } from "@/lib/integrations/omnidimension/client"
+import { publishTextPost } from "@/lib/integrations/facebook/client"
 import { getCall, markCallDispatched, markCallFailed } from "@/lib/platform/calls"
-import { getPostTarget, markPostTargetResult, recomputePostStatus } from "@/lib/platform/posts"
+import { getPost, getPostTarget, markPostTargetResult, recomputePostStatus, type PostTargetRow } from "@/lib/platform/posts"
 
 /**
  * One handler per job type. Every handler that would touch a real external
@@ -92,14 +93,46 @@ async function dispatchCallHandler(job: ClaimedJob): Promise<void> {
   }
 }
 
+/** Facebook is the one provider with a real publish adapter so far, and
+ * only for text posts - Page photo/video publishing needs a publicly
+ * fetchable media URL or a binary upload, and this app's composer only
+ * ever produces client-side object URLs for attached media, so a post
+ * with media is honestly blocked rather than silently published without
+ * its image or falsely reported as sent. */
+async function publishToFacebook(
+  target: PostTargetRow,
+  row: Awaited<ReturnType<typeof resolveActiveConnection>>["row"]
+): Promise<{ status: "published" | "failed" | "blocked"; externalPostId?: string; errorMessage?: string }> {
+  const post = await getPost(target.workspaceId, target.postId)
+  if (!post) return { status: "failed", errorMessage: "Parent post no longer exists." }
+  if (post.media.length > 0) {
+    return { status: "blocked", errorMessage: "Facebook publishing with photos/video isn't implemented yet - only text-only posts can publish. Remove attached media to publish this target." }
+  }
+
+  const variant = post.variants.find((v) => v.platform === "facebook" && v.enabled)
+  const message = variant
+    ? [variant.caption, variant.hashtags].filter(Boolean).join("\n\n")
+    : [post.baseCaption, post.baseHashtags].filter(Boolean).join("\n\n")
+  if (!message.trim()) return { status: "failed", errorMessage: "This post has no caption to publish." }
+
+  const pageId = row?.config?.pageId
+  const { value: pageAccessToken } = resolveCredentialValue(row, "pageAccessToken", "facebook")
+  if (typeof pageId !== "string" || !pageAccessToken) {
+    return { status: "blocked", errorMessage: "No Facebook Page selected for this workspace - choose one in Integrations." }
+  }
+
+  const result = await publishTextPost(pageId, pageAccessToken, message)
+  if (!result.ok) return { status: "failed", errorMessage: result.errorMessage ?? "Facebook publish failed" }
+  return { status: "published", externalPostId: result.externalPostId }
+}
+
 /** Resolves one post_target: never publishes without a genuinely live
  * workspace connection for that target's provider (recording an honest
  * "blocked" result and rolling the parent post's status up, exactly like
- * the queue never faking success elsewhere). Publishing itself - the
- * actual provider API call - has no adapter built yet for any social
- * provider; a genuinely live connection reaches an honest "not yet
- * implemented" result rather than a fabricated success, same contract as
- * every other not-yet-built capability in this file. */
+ * the queue never faking success elsewhere). Facebook text posts have a
+ * real adapter (see publishToFacebook); every other provider still has no
+ * publish adapter and reaches an honest "not yet implemented" result
+ * rather than a fabricated success. */
 async function publishPostHandler(job: ClaimedJob): Promise<void> {
   const targetId = job.payload.targetId as string
   if (!targetId) throw new Error("publish_post job is missing targetId")
@@ -109,7 +142,7 @@ async function publishPostHandler(job: ClaimedJob): Promise<void> {
 
   if (!isProviderId(target.provider)) throw new Error(`Unknown provider: ${target.provider}`)
 
-  const { live } = await resolveActiveConnection(target.workspaceId, target.provider)
+  const { live, row } = await resolveActiveConnection(target.workspaceId, target.provider)
   if (!live) {
     await markPostTargetResult(targetId, {
       status: "blocked",
@@ -119,10 +152,12 @@ async function publishPostHandler(job: ClaimedJob): Promise<void> {
     return
   }
 
-  await markPostTargetResult(targetId, {
-    status: "failed",
-    errorMessage: `Publishing to ${target.provider} is architecture-ready but has no publish adapter implemented yet.`,
-  })
+  const result =
+    target.provider === "facebook"
+      ? await publishToFacebook(target, row)
+      : { status: "failed" as const, errorMessage: `Publishing to ${target.provider} is architecture-ready but has no publish adapter implemented yet.` }
+
+  await markPostTargetResult(targetId, result)
   await recomputePostStatus(target.workspaceId, target.postId)
 }
 

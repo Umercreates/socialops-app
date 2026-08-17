@@ -12,6 +12,7 @@ import { StatusBadge } from "@/components/dashboard/status-badge"
 import type { ProviderConnectionView, IntegrationMode } from "./types"
 import { PROVIDER_REGISTRY } from "@/lib/integrations/providers"
 import { cn } from "@/lib/utils"
+import { FacebookPageSelector } from "./facebook-page-selector"
 
 interface ProviderDetailSheetProps {
   provider: ProviderConnectionView | null
@@ -229,6 +230,10 @@ export function ProviderDetailSheet({ provider, canManage, open, onOpenChange, o
                 <p className="text-xs text-muted-foreground">Save the app credentials above first.</p>
               )}
             </div>
+          )}
+
+          {provider.provider === "facebook" && provider.readiness.oauthComplete && (
+            <FacebookPageSelector canManage={canManage} />
           )}
 
           {webhookUrl && (

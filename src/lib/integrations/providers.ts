@@ -186,7 +186,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     id: "facebook",
     name: "Facebook Page",
     category: "social",
-    description: "Facebook Page publishing and comment moderation - not yet implemented beyond the connection itself.",
+    description: "Facebook Page text-post publishing is live. Photo/video posts and comment moderation aren't implemented yet.",
     capabilities: ["oauth", "publishing", "comments", "analytics"],
     credentialFields: OAUTH_APP_FIELDS,
     supportedModes: ["demo", "live"],
