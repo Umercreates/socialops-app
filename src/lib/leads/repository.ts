@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm"
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm"
 import { withDb } from "@/lib/db/client"
 import { leads, leadActivities } from "@/lib/db/schema"
 import { leadRowToLead, activityRowToActivity } from "./mapper"
@@ -72,6 +72,17 @@ export async function getLead(workspaceId: string, leadId: string): Promise<Lead
     const rows = await db.select().from(leads).where(and(eq(leads.id, leadId), eq(leads.workspaceId, workspaceId))).limit(1)
     const row = rows[0]
     return row ? leadRowToLead(row) : null
+  })
+}
+
+/** Batch equivalent of getLead - one query for many ids instead of one
+ * query per id. Used anywhere a list of other rows (conversations, etc.)
+ * needs each one's associated lead, to avoid an N+1 per row. */
+export async function getLeadsByIds(workspaceId: string, leadIds: string[]): Promise<Map<string, Lead>> {
+  if (leadIds.length === 0) return new Map()
+  return withDb(async (db) => {
+    const rows = await db.select().from(leads).where(and(eq(leads.workspaceId, workspaceId), inArray(leads.id, leadIds)))
+    return new Map(rows.map((row) => [row.id, leadRowToLead(row)]))
   })
 }
 
