@@ -164,7 +164,7 @@ export async function getPostTarget(id: string): Promise<PostTargetRow | null> {
 
 export async function markPostTargetResult(
   targetId: string,
-  result: { status: "published" | "failed" | "blocked"; externalPostId?: string; errorMessage?: string }
+  result: { status: "published" | "failed" | "blocked" | "processing"; externalPostId?: string; errorMessage?: string }
 ): Promise<void> {
   await withDb(async (db) => {
     await db

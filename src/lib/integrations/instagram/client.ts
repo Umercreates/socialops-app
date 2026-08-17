@@ -50,12 +50,25 @@ export interface PublishImageResult {
   errorMessage?: string
 }
 
+async function publishContainer(igUserId: string, accessToken: string, creationId: string): Promise<PublishImageResult> {
+  const publishUrl = new URL(`${GRAPH_API_BASE}/${igUserId}/media_publish`)
+  publishUrl.searchParams.set("creation_id", creationId)
+
+  const publishRes = await fetch(publishUrl.toString(), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(30000),
+  })
+  const publishJson = await publishRes.json().catch(() => null)
+  if (!publishRes.ok) {
+    return { ok: false, errorMessage: publishJson?.error?.message ?? `Instagram publish failed (${publishRes.status})` }
+  }
+  return { ok: true, externalPostId: publishJson?.id as string | undefined }
+}
+
 /** Two-step publish for a single image: create a media container from a
  * publicly fetchable image URL, then publish it. Image containers are
- * ready immediately (no status polling needed) - that's specific to
- * images; video containers process asynchronously and need polling this
- * app doesn't implement yet, so video publishing to Instagram stays
- * honestly unsupported for now rather than half-built. */
+ * ready immediately - unlike video, no status polling is needed. */
 export async function publishInstagramImage(igUserId: string, accessToken: string, imageUrl: string, caption: string): Promise<PublishImageResult> {
   try {
     const createUrl = new URL(`${GRAPH_API_BASE}/${igUserId}/media`)
@@ -74,21 +87,85 @@ export async function publishInstagramImage(igUserId: string, accessToken: strin
     const creationId = createJson?.id as string | undefined
     if (!creationId) return { ok: false, errorMessage: "Instagram didn't return a container id." }
 
-    const publishUrl = new URL(`${GRAPH_API_BASE}/${igUserId}/media_publish`)
-    publishUrl.searchParams.set("creation_id", creationId)
+    return publishContainer(igUserId, accessToken, creationId)
+  } catch (error) {
+    return { ok: false, errorMessage: error instanceof Error ? error.message : "Unknown Instagram publish error" }
+  }
+}
 
-    const publishRes = await fetch(publishUrl.toString(), {
+export interface CreateVideoContainerResult {
+  ok: boolean
+  containerId?: string
+  errorMessage?: string
+}
+
+/** Step 1 of 2 for video: create a REELS container from a publicly
+ * fetchable video URL. Unlike images, this does NOT return something
+ * immediately publishable - Meta processes the video asynchronously, so
+ * the container must be polled (see getContainerStatus) until it reports
+ * FINISHED before /media_publish will succeed. REELS is Meta's current
+ * recommended media_type for video in the main publishing flow. */
+export async function createVideoContainer(igUserId: string, accessToken: string, videoUrl: string, caption: string): Promise<CreateVideoContainerResult> {
+  try {
+    const createUrl = new URL(`${GRAPH_API_BASE}/${igUserId}/media`)
+    createUrl.searchParams.set("video_url", videoUrl)
+    createUrl.searchParams.set("media_type", "REELS")
+    if (caption) createUrl.searchParams.set("caption", caption)
+
+    const res = await fetch(createUrl.toString(), {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
       signal: AbortSignal.timeout(30000),
     })
-    const publishJson = await publishRes.json().catch(() => null)
-    if (!publishRes.ok) {
-      return { ok: false, errorMessage: publishJson?.error?.message ?? `Instagram publish failed (${publishRes.status})` }
+    const json = await res.json().catch(() => null)
+    if (!res.ok) {
+      return { ok: false, errorMessage: json?.error?.message ?? `Instagram video container creation failed (${res.status})` }
     }
-
-    return { ok: true, externalPostId: publishJson?.id as string | undefined }
+    const containerId = json?.id as string | undefined
+    if (!containerId) return { ok: false, errorMessage: "Instagram didn't return a container id." }
+    return { ok: true, containerId }
   } catch (error) {
-    return { ok: false, errorMessage: error instanceof Error ? error.message : "Unknown Instagram publish error" }
+    return { ok: false, errorMessage: error instanceof Error ? error.message : "Unknown Instagram video container error" }
   }
+}
+
+export type ContainerStatus = "IN_PROGRESS" | "FINISHED" | "ERROR" | "EXPIRED" | "PUBLISHED" | "UNKNOWN"
+
+export interface ContainerStatusResult {
+  ok: boolean
+  status?: ContainerStatus
+  errorMessage?: string
+}
+
+/** GET /{container-id}?fields=status_code - Meta's documented way to check
+ * whether an async (video) container has finished processing. Recommended
+ * cadence is once per minute for up to 5 minutes, which is exactly the
+ * schedule instagram_poll_publish (see src/lib/jobs/handlers.ts) follows
+ * via the job queue - never a busy-wait inside one request. */
+export async function getContainerStatus(containerId: string, accessToken: string): Promise<ContainerStatusResult> {
+  try {
+    const url = new URL(`${GRAPH_API_BASE}/${containerId}`)
+    url.searchParams.set("fields", "status_code")
+
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(15000),
+    })
+    const json = await res.json().catch(() => null)
+    if (!res.ok) return { ok: false, errorMessage: json?.error?.message ?? `Instagram API returned ${res.status}` }
+
+    const status = json?.status_code as ContainerStatus | undefined
+    return { ok: true, status: status ?? "UNKNOWN" }
+  } catch (error) {
+    return { ok: false, errorMessage: error instanceof Error ? error.message : "Couldn't reach the Instagram API." }
+  }
+}
+
+/** Step 2 of 2 for video: publish an already-FINISHED container. Exported
+ * separately from publishInstagramImage's internal helper of the same
+ * underlying call, since the caller here (the poll job) reaches this
+ * point on a completely different job execution than the one that
+ * created the container. */
+export async function publishInstagramVideoContainer(igUserId: string, accessToken: string, containerId: string): Promise<PublishImageResult> {
+  return publishContainer(igUserId, accessToken, containerId)
 }

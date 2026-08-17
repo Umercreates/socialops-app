@@ -202,7 +202,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     id: "instagram",
     name: "Instagram Business",
     category: "social",
-    description: "Instagram image publishing is live, automatically, once Facebook is connected and its selected Page has a linked Instagram professional account - this separate connection isn't required for publishing. Video and comment moderation aren't implemented yet.",
+    description: "Instagram image and video (Reels) publishing are live, automatically, once Facebook is connected and its selected Page has a linked Instagram professional account - this separate connection isn't required for publishing. Carousel posts and comment moderation aren't implemented yet.",
     capabilities: ["oauth", "publishing", "comments", "analytics"],
     credentialFields: OAUTH_APP_FIELDS,
     supportedModes: ["demo", "live"],

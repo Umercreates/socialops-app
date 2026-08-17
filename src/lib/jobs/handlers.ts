@@ -1,4 +1,4 @@
-import type { JobType, ClaimedJob } from "./queue"
+import { enqueueJob, type JobType, type ClaimedJob } from "./queue"
 import { isProviderId } from "@/lib/integrations/providers"
 import { getConnection } from "@/lib/integrations/repository"
 import { resolveCredentialValue, storeOAuthTokens } from "@/lib/integrations/service"
@@ -6,7 +6,13 @@ import { refreshAccessToken } from "@/lib/integrations/oauth"
 import { resolveActiveConnection } from "@/lib/integrations/credential-resolution"
 import { dispatchCall } from "@/lib/integrations/omnidimension/client"
 import { publishTextPost, publishImagePost, publishVideoPost } from "@/lib/integrations/facebook/client"
-import { getLinkedInstagramAccount, publishInstagramImage } from "@/lib/integrations/instagram/client"
+import {
+  getLinkedInstagramAccount,
+  publishInstagramImage,
+  createVideoContainer,
+  getContainerStatus,
+  publishInstagramVideoContainer,
+} from "@/lib/integrations/instagram/client"
 import { getCall, markCallDispatched, markCallFailed } from "@/lib/platform/calls"
 import { getPost, getPostTarget, markPostTargetResult, recomputePostStatus, type PostTargetRow } from "@/lib/platform/posts"
 import { getMediaAsset } from "@/lib/platform/media"
@@ -156,15 +162,17 @@ async function publishToFacebook(
  * Page - there is no separate Instagram credential to check here, so this
  * deliberately resolves the Facebook connection instead of Instagram's
  * own (unused for publishing) integration_connections row. Only a single
- * image is supported: Instagram's Content Publishing API needs a publicly
- * fetchable image_url (this app's own media is normally kept behind
- * authenticated retrieval - buildPublicMediaUrl is the one narrow,
- * signed, time-limited exception made for exactly this), and video
- * containers need async status polling this app doesn't implement, so
- * video is honestly blocked rather than half-built. */
+ * image or video is supported: Instagram's Content Publishing API needs a
+ * publicly fetchable image_url/video_url (this app's own media is
+ * normally kept behind authenticated retrieval - buildPublicMediaUrl is
+ * the one narrow, signed, time-limited exception made for exactly this).
+ * Video containers process asynchronously - this creates the container
+ * and hands off to instagram_poll_publish (a separate job) rather than
+ * waiting here, so the target ends this function "processing", not
+ * terminal. */
 async function publishToInstagram(
   target: PostTargetRow
-): Promise<{ status: "published" | "failed" | "blocked"; externalPostId?: string; errorMessage?: string }> {
+): Promise<{ status: "published" | "failed" | "blocked" | "processing"; externalPostId?: string; errorMessage?: string }> {
   const { live, row } = await resolveActiveConnection(target.workspaceId, "facebook")
   const pageId = row?.config?.pageId
   const { value: pageAccessToken } = resolveCredentialValue(row, "pageAccessToken", "facebook")
@@ -180,24 +188,97 @@ async function publishToInstagram(
   const post = await getPost(target.workspaceId, target.postId)
   if (!post) return { status: "failed", errorMessage: "Parent post no longer exists." }
 
-  if (post.media.length === 0) return { status: "blocked", errorMessage: "Instagram requires an attached image - text-only posts aren't supported." }
-  if (post.media.length > 1) return { status: "blocked", errorMessage: "Instagram publishing supports at most one attached image right now (no carousel support yet)." }
+  if (post.media.length === 0) return { status: "blocked", errorMessage: "Instagram requires an attached image or video - text-only posts aren't supported." }
+  if (post.media.length > 1) return { status: "blocked", errorMessage: "Instagram publishing supports at most one attached image or video right now (no carousel support yet)." }
 
   const media = post.media[0]
   if (!media.mediaAssetId) return { status: "blocked", errorMessage: "This post's attached media hasn't finished uploading - try publishing again in a moment." }
   const asset = await getMediaAsset(target.workspaceId, media.mediaAssetId)
   if (!asset) return { status: "failed", errorMessage: "The attached media file no longer exists." }
-  if (asset.mediaType === "video") return { status: "blocked", errorMessage: "Instagram video publishing isn't implemented yet - only images are supported." }
 
   const variant = post.variants.find((v) => v.platform === "instagram" && v.enabled)
   const caption = variant
     ? [variant.caption, variant.hashtags].filter(Boolean).join("\n\n")
     : [post.baseCaption, post.baseHashtags].filter(Boolean).join("\n\n")
 
+  if (asset.mediaType === "video") {
+    const videoUrl = buildPublicMediaUrl(requireAppOrigin(), asset.id)
+    const container = await createVideoContainer(linked.igUserId, pageAccessToken, videoUrl, caption)
+    if (!container.ok || !container.containerId) {
+      return { status: "failed", errorMessage: container.errorMessage ?? "Instagram video container creation failed" }
+    }
+    await enqueueJob({
+      workspaceId: target.workspaceId,
+      type: "instagram_poll_publish",
+      payload: { targetId: target.id, containerId: container.containerId, igUserId: linked.igUserId },
+      availableAt: new Date(Date.now() + 60000),
+      maxAttempts: 6,
+    })
+    return { status: "processing" }
+  }
+
   const imageUrl = buildPublicMediaUrl(requireAppOrigin(), asset.id)
   const result = await publishInstagramImage(linked.igUserId, pageAccessToken, imageUrl, caption)
   if (!result.ok) return { status: "failed", errorMessage: result.errorMessage ?? "Instagram publish failed" }
   return { status: "published", externalPostId: result.externalPostId }
+}
+
+/** Polls one Instagram video container and either publishes it (FINISHED),
+ * records an honest failure (ERROR/EXPIRED), or - the common case for the
+ * first several checks - throws so the job queue's own retry/backoff
+ * re-runs this same check later, never a busy-wait inside one request.
+ * Meta's Page access token is re-resolved fresh each run rather than
+ * carried in the job payload, so a real credential never sits in the
+ * jobs table's plaintext JSONB column. */
+async function instagramPollPublishHandler(job: ClaimedJob): Promise<void> {
+  const targetId = job.payload.targetId as string
+  const containerId = job.payload.containerId as string
+  const igUserId = job.payload.igUserId as string
+  if (!targetId || !containerId || !igUserId) throw new Error("instagram_poll_publish job is missing required fields")
+
+  const { row } = await resolveActiveConnection(job.workspaceId, "facebook")
+  const { value: pageAccessToken } = resolveCredentialValue(row, "pageAccessToken", "facebook")
+  if (!pageAccessToken) {
+    await markPostTargetResult(targetId, { status: "failed", errorMessage: "Facebook Page is no longer connected - Instagram video couldn't be published." })
+    const target = await getPostTarget(targetId)
+    if (target) await recomputePostStatus(target.workspaceId, target.postId)
+    return
+  }
+
+  const statusResult = await getContainerStatus(containerId, pageAccessToken)
+
+  async function finish(result: { status: "published" | "failed"; externalPostId?: string; errorMessage?: string }) {
+    await markPostTargetResult(targetId, result)
+    const target = await getPostTarget(targetId)
+    if (target) await recomputePostStatus(target.workspaceId, target.postId)
+  }
+
+  if (statusResult.ok && statusResult.status === "FINISHED") {
+    const published = await publishInstagramVideoContainer(igUserId, pageAccessToken, containerId)
+    await finish(
+      published.ok
+        ? { status: "published", externalPostId: published.externalPostId }
+        : { status: "failed", errorMessage: published.errorMessage ?? "Instagram video publish failed" }
+    )
+    return
+  }
+
+  if (statusResult.ok && (statusResult.status === "ERROR" || statusResult.status === "EXPIRED")) {
+    await finish({ status: "failed", errorMessage: `Instagram video processing ${statusResult.status.toLowerCase()}.` })
+    return
+  }
+
+  // Still processing (or a transient status-check failure) - throw so the
+  // job queue's own retry/backoff re-runs this check later. On the last
+  // allowed attempt this also throws (matching dispatchCallHandler's
+  // pattern - failJob itself marks the job permanently failed once
+  // exhausted, not endlessly pending), but only after first recording an
+  // honest timeout on the target so it never stays stuck at "processing".
+  const isFinalAttempt = job.attempts >= job.maxAttempts
+  if (isFinalAttempt) {
+    await finish({ status: "failed", errorMessage: "Instagram video processing didn't finish in time - try publishing again later." })
+  }
+  throw new Error(statusResult.errorMessage ?? `Instagram video container still processing (status: ${statusResult.status ?? "unknown"})`)
 }
 
 /** Resolves one post_target: never publishes without a genuinely live
@@ -263,4 +344,5 @@ export const JOB_HANDLERS: Record<JobType, JobHandler> = {
   schedule_post: notYetImplemented("Scheduled publishing"),
   qualification: notYetImplemented("Standalone qualification job"),
   lead_followup: notYetImplemented("Lead follow-up"),
+  instagram_poll_publish: instagramPollPublishHandler,
 }
