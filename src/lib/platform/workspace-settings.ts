@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { eq } from "drizzle-orm"
 import { withDb } from "@/lib/db/client"
-import { workspaceSettings } from "@/lib/db/schema"
+import { workspaceSettings, workspaces } from "@/lib/db/schema"
 
 export interface WorkspaceSettingsView {
   timezone: string
@@ -51,5 +51,15 @@ export async function updateWorkspaceSettings(
     }
 
     return getWorkspaceSettings(workspaceId)
+  })
+}
+
+/** The business/company name lives on the workspaces table itself (its
+ * one identifying field), not workspace_settings - kept separate here so
+ * callers that only need settings never touch the workspace's identity
+ * record. */
+export async function updateWorkspaceName(workspaceId: string, name: string): Promise<void> {
+  await withDb(async (db) => {
+    await db.update(workspaces).set({ name, updatedAt: new Date() }).where(eq(workspaces.id, workspaceId))
   })
 }

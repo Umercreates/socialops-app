@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireAuth, requireRole } from "@/lib/auth/guard"
 import { verifySameOrigin } from "@/lib/auth/csrf"
-import { getWorkspaceSettings, updateWorkspaceSettings } from "@/lib/platform/workspace-settings"
+import { getWorkspaceSettings, updateWorkspaceSettings, updateWorkspaceName } from "@/lib/platform/workspace-settings"
 import { apiError } from "@/lib/api/errors"
 
 export async function GET() {
@@ -11,7 +11,7 @@ export async function GET() {
     if (!auth.ok) return auth.response
 
     const settings = await getWorkspaceSettings(auth.ctx.workspaceId)
-    return NextResponse.json({ settings })
+    return NextResponse.json({ settings, workspaceName: auth.ctx.workspaceName })
   } catch (error) {
     return apiError(error, "Failed to load workspace settings")
   }
@@ -19,6 +19,7 @@ export async function GET() {
 
 const patchSchema = z
   .object({
+    workspaceName: z.string().trim().min(1).max(200),
     timezone: z.string().trim().min(1).max(100),
     defaultLanguage: z.string().trim().min(2).max(10),
     leadScoreThreshold: z.number().int().min(0).max(100),
@@ -37,9 +38,11 @@ export async function PATCH(request: Request) {
     const roleCheck = requireRole(auth.ctx, ["owner", "admin"])
     if (roleCheck) return roleCheck
 
-    const patch = patchSchema.parse(await request.json())
-    const settings = await updateWorkspaceSettings(auth.ctx.workspaceId, patch)
-    return NextResponse.json({ settings })
+    const { workspaceName, ...settingsPatch } = patchSchema.parse(await request.json())
+    if (workspaceName !== undefined) await updateWorkspaceName(auth.ctx.workspaceId, workspaceName)
+    const settings = await updateWorkspaceSettings(auth.ctx.workspaceId, settingsPatch)
+
+    return NextResponse.json({ settings, workspaceName: workspaceName ?? auth.ctx.workspaceName })
   } catch (error) {
     return apiError(error, "Failed to update workspace settings")
   }

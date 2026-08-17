@@ -22,10 +22,49 @@ const ROWS: NotificationRow[] = [
   { key: "automations", icon: Workflow, label: "Automation activity", description: "Get notified about automation runs and escalations", defaultChecked: false },
 ]
 
+const DEFAULTS: Record<string, boolean> = Object.fromEntries(ROWS.map((r) => [r.key, r.defaultChecked]))
+
+/** Real, workspace-scoped preferences - persisted in
+ * workspace_settings.notification_preferences via /api/workspace-settings,
+ * not local-only state that reset on reload. */
 export function NotificationSettings() {
-  const [state, setState] = React.useState<Record<string, boolean>>(
-    Object.fromEntries(ROWS.map((r) => [r.key, r.defaultChecked]))
-  )
+  const [state, setState] = React.useState<Record<string, boolean>>(DEFAULTS)
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      setLoading(true)
+      const data = await fetch("/api/workspace-settings", { credentials: "same-origin" })
+        .then((res) => (res.ok ? res.json() : null))
+        .catch(() => null)
+      if (cancelled) return
+      const saved = data?.settings?.notificationPreferences as Record<string, boolean> | undefined
+      if (saved && Object.keys(saved).length > 0) setState({ ...DEFAULTS, ...saved })
+      setLoading(false)
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function handleToggle(key: string, checked: boolean) {
+    const next = { ...state, [key]: checked }
+    setState(next)
+    await fetch("/api/workspace-settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ notificationPreferences: next }),
+    }).catch(() => {
+      // Best-effort: a failed save just leaves the toggle out of sync with
+      // the server until the next successful one - not worth a whole
+      // error-banner UI for a preferences toggle.
+    })
+  }
 
   return (
     <Card className="gap-1 px-4 py-2 sm:px-5">
@@ -38,10 +77,7 @@ export function NotificationSettings() {
             <span className="text-sm text-foreground">{row.label}</span>
             <span className="text-xs text-muted-foreground">{row.description}</span>
           </div>
-          <Switch
-            checked={state[row.key]}
-            onCheckedChange={(checked) => setState((prev) => ({ ...prev, [row.key]: checked }))}
-          />
+          <Switch checked={state[row.key]} disabled={loading} onCheckedChange={(checked) => handleToggle(row.key, checked)} />
         </div>
       ))}
     </Card>
