@@ -1,12 +1,14 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, CircleAlert } from "lucide-react"
+import { Loader2, CircleAlert, CircleCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { formatRelativeTime } from "@/lib/format"
+import { SHEET_FIELD_KEYS, SHEET_FIELD_LABELS, DEFAULT_COLUMN_MAPPING, REQUIRED_SHEET_FIELDS } from "@/lib/integrations/google-sheets/fields"
 
 interface Spreadsheet {
   id: string
@@ -19,6 +21,7 @@ interface Selection {
   spreadsheetId: string
   spreadsheetName: string | null
   worksheetName: string
+  columnMapping: Record<string, string>
 }
 interface SyncSummary {
   lastSyncedAt: string | null
@@ -161,6 +164,10 @@ export function GoogleSheetsPicker({ canManage }: { canManage: boolean }) {
         </div>
       )}
 
+      {step === "view" && selection && (
+        <ColumnMappingEditor selection={selection} canManage={canManage} onSaved={setSelection} />
+      )}
+
       {step === "pick-spreadsheet" && (
         <>
           {error ? (
@@ -226,6 +233,133 @@ export function GoogleSheetsPicker({ canManage }: { canManage: boolean }) {
             </div>
           )}
         </>
+      )}
+    </div>
+  )
+}
+
+const COLUMN_LETTER_PATTERN = /^[A-Za-z]{1,2}$/
+
+/** Which spreadsheet column each EasyLife field lands in - an empty saved
+ * mapping means "use the sensible defaults" (see fields.ts); clearing a
+ * field here and saving disables it (that column is simply never
+ * written), which is why REQUIRED_SHEET_FIELDS can't be cleared. */
+function ColumnMappingEditor({ selection, canManage, onSaved }: { selection: Selection; canManage: boolean; onSaved: (selection: Selection) => void }) {
+  const initial = Object.keys(selection.columnMapping).length > 0 ? selection.columnMapping : DEFAULT_COLUMN_MAPPING
+  const [mapping, setMapping] = React.useState<Record<string, string>>(initial)
+  const [saving, setSaving] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+  const [saved, setSaved] = React.useState(false)
+
+  function setField(key: string, value: string) {
+    setSaved(false)
+    setMapping((prev) => ({ ...prev, [key]: value.toUpperCase() }))
+  }
+
+  function resetToDefaults() {
+    setSaved(false)
+    setError(null)
+    setMapping({ ...DEFAULT_COLUMN_MAPPING })
+  }
+
+  async function save() {
+    setError(null)
+    for (const key of REQUIRED_SHEET_FIELDS) {
+      if (!mapping[key]?.trim()) {
+        setError(`${SHEET_FIELD_LABELS[key]} is required and can't be disabled.`)
+        return
+      }
+    }
+    for (const [key, value] of Object.entries(mapping)) {
+      if (value.trim() && !COLUMN_LETTER_PATTERN.test(value.trim())) {
+        setError(`"${value}" for ${SHEET_FIELD_LABELS[key as keyof typeof SHEET_FIELD_LABELS] ?? key} isn't a valid column letter (e.g. A, B, AA).`)
+        return
+      }
+    }
+
+    const cleaned = Object.fromEntries(Object.entries(mapping).filter(([, v]) => v.trim().length > 0))
+
+    setSaving(true)
+    try {
+      const res = await fetch("/api/integrations/google-sheets/selection", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          spreadsheetId: selection.spreadsheetId,
+          spreadsheetName: selection.spreadsheetName ?? undefined,
+          worksheetName: selection.worksheetName,
+          columnMapping: cleaned,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? "Failed to save field mapping.")
+        return
+      }
+      onSaved(data.selection)
+      setSaved(true)
+    } catch {
+      setError("Couldn't reach the server.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5 rounded-lg border border-border p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-foreground">Field mapping</span>
+        {canManage && (
+          <Button type="button" size="sm" variant="ghost" onClick={resetToDefaults}>
+            Reset to defaults
+          </Button>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Which spreadsheet column each field writes to. Clear a field to skip writing it.
+      </p>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+        {SHEET_FIELD_KEYS.map((key) => (
+          <div key={key} className="flex flex-col gap-1">
+            <Label htmlFor={`sheet-field-${key}`} className="text-xs text-muted-foreground">
+              {SHEET_FIELD_LABELS[key]}
+              {REQUIRED_SHEET_FIELDS.includes(key) && <span className="text-destructive"> *</span>}
+            </Label>
+            {canManage ? (
+              <Input
+                id={`sheet-field-${key}`}
+                value={mapping[key] ?? ""}
+                onChange={(e) => setField(key, e.target.value)}
+                placeholder="—"
+                maxLength={2}
+                className="h-8 text-sm"
+              />
+            ) : (
+              <span className="text-sm text-foreground">{mapping[key] || "—"}</span>
+            )}
+          </div>
+        ))}
+      </div>
+      {error && (
+        <Alert variant="destructive">
+          <CircleAlert />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      {canManage && (
+        <div className="flex items-center gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={save} disabled={saving} className="w-fit">
+            {saving && <Loader2 className="size-4 animate-spin" />}
+            Save mapping
+          </Button>
+          {saved && (
+            <span className="flex items-center gap-1 text-xs text-success">
+              <CircleCheck className="size-3.5" />
+              Saved.
+            </span>
+          )}
+        </div>
       )}
     </div>
   )

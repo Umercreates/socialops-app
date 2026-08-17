@@ -5,6 +5,7 @@ import { getGoogleSheetsSelection } from "@/lib/platform/google-sheets-selection
 import { getSyncedRow, recordSyncResult } from "@/lib/platform/google-sheets-sync"
 import { getLead } from "@/lib/leads/repository"
 import { appendRow, updateRow } from "./client"
+import { SHEET_FIELD_KEYS, DEFAULT_COLUMN_MAPPING, type SheetFieldKey } from "./fields"
 
 /**
  * PostgreSQL stays the source of truth for CRM data - this only mirrors a
@@ -13,21 +14,7 @@ import { appendRow, updateRow } from "./client"
  * now (matches what a Lead actually has); columnMapping only controls
  * which spreadsheet column each field lands in, not which fields exist.
  */
-export const SHEET_FIELD_KEYS = ["name", "phone", "email", "company", "service", "source", "lead_score", "status", "next_action", "updated_at"] as const
-export type SheetFieldKey = (typeof SHEET_FIELD_KEYS)[number]
-
-const DEFAULT_COLUMN_MAPPING: Record<SheetFieldKey, string> = {
-  name: "A",
-  phone: "B",
-  email: "C",
-  company: "D",
-  service: "E",
-  source: "F",
-  lead_score: "G",
-  status: "H",
-  next_action: "I",
-  updated_at: "J",
-}
+export { SHEET_FIELD_KEYS, type SheetFieldKey }
 
 function fieldValue(lead: Lead, key: SheetFieldKey): string {
   switch (key) {
@@ -65,9 +52,15 @@ function columnLetterToIndex(letter: string): number {
 /** Builds one contiguous row (starting at column A) wide enough to reach
  * the furthest-mapped field, honoring a workspace's custom column
  * ordering/gaps - a field mapped to an unused later column doesn't need
- * every column before it to also be mapped. */
+ * every column before it to also be mapped.
+ *
+ * An empty columnMapping means "never customized" and gets the full
+ * default; a non-empty one is used exactly as saved, with no merge - a
+ * workspace that has customized mapping and deliberately left a field out
+ * (to disable it) would otherwise see it silently reappear from the
+ * default merge, which defeats the point of disabling it. */
 function buildRowValues(lead: Lead, columnMapping: Record<string, string>): string[] {
-  const mapping = { ...DEFAULT_COLUMN_MAPPING, ...columnMapping } as Record<string, string>
+  const mapping: Record<string, string> = Object.keys(columnMapping).length > 0 ? columnMapping : DEFAULT_COLUMN_MAPPING
   let width = 0
   const cells: Record<number, string> = {}
   for (const key of SHEET_FIELD_KEYS) {
