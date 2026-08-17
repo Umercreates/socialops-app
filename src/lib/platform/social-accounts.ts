@@ -110,6 +110,24 @@ export async function upsertSocialAccount(input: UpsertSocialAccountInput): Prom
   })
 }
 
+/** Resolves which workspace (and social_accounts row) owns a given
+ * provider account, by the provider's own external id (Facebook Page id,
+ * Instagram Business Account id, etc). Webhook deliveries carry no
+ * session, so this - not a client-supplied workspace id - is how a
+ * webhook payload gets scoped to the right workspace, same pattern as
+ * WhatsApp's findWhatsAppContextByWaba. Scans across all workspaces
+ * (there is no authenticated caller yet to filter by). */
+export async function findSocialAccountByExternalId(provider: string, externalAccountId: string): Promise<{ workspaceId: string; socialAccountId: string } | null> {
+  return withDb(async (db) => {
+    const rows = await db
+      .select({ id: socialAccounts.id, workspaceId: socialAccounts.workspaceId })
+      .from(socialAccounts)
+      .where(and(eq(socialAccounts.provider, provider), eq(socialAccounts.externalAccountId, externalAccountId)))
+      .limit(1)
+    return rows[0] ? { workspaceId: rows[0].workspaceId, socialAccountId: rows[0].id } : null
+  })
+}
+
 export async function disconnectSocialAccount(workspaceId: string, accountId: string): Promise<void> {
   await withDb(async (db) => {
     await db

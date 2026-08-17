@@ -54,10 +54,64 @@ export async function listFacebookPages(userAccessToken: string): Promise<ListPa
   }
 }
 
+export interface SubscribeResult {
+  ok: boolean
+  errorMessage?: string
+}
+
+/** POST /{page-id}/subscribed_apps?subscribed_fields=feed,comments -
+ * subscribes this Page (and its linked Instagram account, if any) to
+ * real-time comment webhooks, using the platform app already registered
+ * with a callback URL and verify token in the Meta App Dashboard. This is
+ * what makes comment ingestion "zero client setup": the client only picks
+ * a Page, this call does the rest server-side. Requires
+ * pages_manage_metadata. */
+export async function subscribePageToWebhooks(pageId: string, pageAccessToken: string): Promise<SubscribeResult> {
+  try {
+    const res = await fetch(`${GRAPH_API_BASE}/${pageId}/subscribed_apps?subscribed_fields=feed,comments`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${pageAccessToken}` },
+      signal: AbortSignal.timeout(15000),
+    })
+    const json = await res.json().catch(() => null)
+    if (!res.ok || json?.success === false) {
+      return { ok: false, errorMessage: json?.error?.message ?? `Facebook webhook subscription failed (${res.status})` }
+    }
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, errorMessage: error instanceof Error ? error.message : "Unknown Facebook subscription error" }
+  }
+}
+
 export interface PublishTextPostResult {
   ok: boolean
   externalPostId?: string
   errorMessage?: string
+}
+
+export interface ReplyToCommentResult {
+  ok: boolean
+  replyId?: string
+  errorMessage?: string
+}
+
+/** POST /{comment-id}/comments - replies to a Page post comment. Requires
+ * the Page access token from a user who can MODERATE the Page
+ * (pages_manage_engagement scope). */
+export async function replyToFacebookComment(commentId: string, pageAccessToken: string, message: string): Promise<ReplyToCommentResult> {
+  try {
+    const res = await fetch(`${GRAPH_API_BASE}/${commentId}/comments`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${pageAccessToken}`, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(15000),
+      body: JSON.stringify({ message }),
+    })
+    const json = await res.json().catch(() => null)
+    if (!res.ok) return { ok: false, errorMessage: json?.error?.message ?? `Facebook reply failed (${res.status})` }
+    return { ok: true, replyId: json?.id }
+  } catch (error) {
+    return { ok: false, errorMessage: error instanceof Error ? error.message : "Unknown Facebook reply error" }
+  }
 }
 
 /** POST /{page-id}/feed - publishes a text (optionally link-carrying) post

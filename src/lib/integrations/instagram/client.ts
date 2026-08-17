@@ -53,6 +53,32 @@ export interface PublishImageResult {
   errorMessage?: string
 }
 
+export interface ReplyToCommentResult {
+  ok: boolean
+  replyId?: string
+  errorMessage?: string
+}
+
+/** POST /{ig-comment-id}/replies - replies to an Instagram comment. Uses
+ * the same Page access token as publishing (Facebook Login flow grants
+ * Instagram comment moderation through the linked Page, no separate
+ * Instagram token). Requires the instagram_manage_comments scope. */
+export async function replyToInstagramComment(igCommentId: string, pageAccessToken: string, message: string): Promise<ReplyToCommentResult> {
+  try {
+    const res = await fetch(`${GRAPH_API_BASE}/${igCommentId}/replies`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${pageAccessToken}`, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(15000),
+      body: JSON.stringify({ message }),
+    })
+    const json = await res.json().catch(() => null)
+    if (!res.ok) return { ok: false, errorMessage: json?.error?.message ?? `Instagram reply failed (${res.status})` }
+    return { ok: true, replyId: json?.id }
+  } catch (error) {
+    return { ok: false, errorMessage: error instanceof Error ? error.message : "Unknown Instagram reply error" }
+  }
+}
+
 async function publishContainer(igUserId: string, accessToken: string, creationId: string): Promise<PublishImageResult> {
   const publishUrl = new URL(`${GRAPH_API_BASE}/${igUserId}/media_publish`)
   publishUrl.searchParams.set("creation_id", creationId)
