@@ -8,9 +8,13 @@ import { getAppOrigin } from "@/lib/app-url"
 import { apiError } from "@/lib/api/errors"
 
 /** Begins an OAuth connection: redirects the browser to the provider's
- * authorization screen. Requires a workspace-saved Client ID for this
- * provider - there is no shared platform-wide app credential, since each
- * client authorizes under their own developer app. */
+ * authorization screen. Resolves a Client ID via resolveCredentialValue,
+ * which checks a workspace-saved value first, then falls back to the
+ * platform's own app credential (platformAppEnvVars) when the provider
+ * defines one - so a workspace with no saved Client ID can still connect
+ * using EasyLife's own registered app, and only needs to supply its own
+ * when it wants to authorize under a different developer app (e.g. an
+ * agency reselling under its own app). */
 export async function GET(request: Request, ctx: { params: Promise<{ provider: string }> }) {
   try {
     const auth = await requireAuth()
