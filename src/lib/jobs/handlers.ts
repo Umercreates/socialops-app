@@ -1,4 +1,4 @@
-import { enqueueJob, type JobType, type ClaimedJob } from "./queue"
+import { enqueueJob, NonRetryableJobError, type JobType, type ClaimedJob } from "./queue"
 import { isProviderId, PROVIDER_REGISTRY } from "@/lib/integrations/providers"
 import { getConnection } from "@/lib/integrations/repository"
 import { createNotification } from "@/lib/platform/notifications"
@@ -39,7 +39,7 @@ export type JobHandler = (job: ClaimedJob) => Promise<void>
 
 async function refreshTokenHandler(job: ClaimedJob): Promise<void> {
   const provider = job.payload.provider as string
-  if (!isProviderId(provider)) throw new Error(`Unknown provider: ${provider}`)
+  if (!isProviderId(provider)) throw new NonRetryableJobError(`Unknown provider: ${provider}`)
 
   const row = await getConnection(job.workspaceId, provider)
   const { value: refreshToken } = resolveCredentialValue(row, "refreshToken", provider)
@@ -47,17 +47,16 @@ async function refreshTokenHandler(job: ClaimedJob): Promise<void> {
   const { value: clientSecret } = resolveCredentialValue(row, "clientSecret", provider)
   if (!refreshToken || !clientId || !clientSecret) {
     // Not every provider issues a refresh token to a standard (non-partner)
-    // app - LinkedIn is a known example. Only worth a notification once
-    // this attempt is truly exhausted, not on the first check.
-    if (job.attempts >= job.maxAttempts) {
-      await createNotification({
-        workspaceId: job.workspaceId,
-        type: "account-warning",
-        title: `${PROVIDER_REGISTRY[provider].name} needs reconnecting`,
-        description: "No refresh token is available - reconnect this provider in Integrations before its access token expires.",
-      })
-    }
-    throw new Error(`${provider} is not connected via OAuth - nothing to refresh`)
+    // app - LinkedIn is a known example. Non-retryable: no amount of
+    // waiting produces a refresh token that isn't there, so this is the
+    // terminal outcome and always worth notifying about.
+    await createNotification({
+      workspaceId: job.workspaceId,
+      type: "account-warning",
+      title: `${PROVIDER_REGISTRY[provider].name} needs reconnecting`,
+      description: "No refresh token is available - reconnect this provider in Integrations before its access token expires.",
+    })
+    throw new NonRetryableJobError(`${provider} is not connected via OAuth - nothing to refresh`)
   }
 
   const result = await refreshAccessToken(provider, refreshToken, clientId, clientSecret)
@@ -94,24 +93,24 @@ async function refreshTokenHandler(job: ClaimedJob): Promise<void> {
  * without prematurely telling anyone the call failed for good. */
 async function dispatchCallHandler(job: ClaimedJob): Promise<void> {
   const callId = job.payload.callId as string
-  if (!callId) throw new Error("dispatch_call job is missing callId")
+  if (!callId) throw new NonRetryableJobError("dispatch_call job is missing callId")
 
   const call = await getCall(job.workspaceId, callId)
-  if (!call) throw new Error(`Call ${callId} not found in this workspace`)
+  if (!call) throw new NonRetryableJobError(`Call ${callId} not found in this workspace`)
   const toNumber = job.payload.toNumber as string
-  if (!toNumber) throw new Error("dispatch_call job is missing toNumber")
+  if (!toNumber) throw new NonRetryableJobError("dispatch_call job is missing toNumber")
 
   try {
     const { live, row } = await resolveActiveConnection(job.workspaceId, "omnidimension")
     if (!live) {
-      throw new Error("OmniDimension is not activated (live) for this workspace - nothing to dispatch")
+      throw new NonRetryableJobError("OmniDimension is not activated (live) for this workspace - nothing to dispatch")
     }
 
     const { value: apiKey } = resolveCredentialValue(row, "apiKey", "omnidimension")
     const { value: agentId } = resolveCredentialValue(row, "agentId", "omnidimension")
     const { value: fromNumberId } = resolveCredentialValue(row, "fromNumberId", "omnidimension")
     if (!apiKey || !agentId) {
-      throw new Error("OmniDimension API key or Agent ID is missing")
+      throw new NonRetryableJobError("OmniDimension API key or Agent ID is missing")
     }
 
     const result = await dispatchCall({ apiKey, agentId, toNumber, fromNumberId })
@@ -122,8 +121,12 @@ async function dispatchCallHandler(job: ClaimedJob): Promise<void> {
     await markCallDispatched(callId, result.providerCallId)
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown call dispatch error"
-    const isFinalAttempt = job.attempts >= job.maxAttempts
-    if (isFinalAttempt) {
+    // Non-retryable errors ARE this attempt's final outcome, same as
+    // exhausting every retry - both cases need the call row and
+    // notification updated now, not left pending for attempts that will
+    // never come (non-retryable) or a retry that hasn't happened yet.
+    const isFinalOutcome = error instanceof NonRetryableJobError || job.attempts >= job.maxAttempts
+    if (isFinalOutcome) {
       await markCallFailed(callId, message)
       await createNotification({ workspaceId: job.workspaceId, type: "call-completed", title: "Call couldn't be placed", description: message })
     }
@@ -302,7 +305,7 @@ async function publishToTikTok(
 async function tiktokPollPublishHandler(job: ClaimedJob): Promise<void> {
   const targetId = job.payload.targetId as string
   const publishId = job.payload.publishId as string
-  if (!targetId || !publishId) throw new Error("tiktok_poll_publish job is missing required fields")
+  if (!targetId || !publishId) throw new NonRetryableJobError("tiktok_poll_publish job is missing required fields")
 
   const row = await getConnection(job.workspaceId, "tiktok")
   const { value: accessToken } = resolveCredentialValue(row, "accessToken", "tiktok")
@@ -505,7 +508,7 @@ async function instagramPollPublishHandler(job: ClaimedJob): Promise<void> {
   const targetId = job.payload.targetId as string
   const containerId = job.payload.containerId as string
   const igUserId = job.payload.igUserId as string
-  if (!targetId || !containerId || !igUserId) throw new Error("instagram_poll_publish job is missing required fields")
+  if (!targetId || !containerId || !igUserId) throw new NonRetryableJobError("instagram_poll_publish job is missing required fields")
 
   const { row } = await resolveActiveConnection(job.workspaceId, "facebook")
   const { value: pageAccessToken } = resolveCredentialValue(row, "pageAccessToken", "facebook")
@@ -564,12 +567,12 @@ async function instagramPollPublishHandler(job: ClaimedJob): Promise<void> {
  * inside publishToInstagram against the Facebook connection instead. */
 async function publishPostHandler(job: ClaimedJob): Promise<void> {
   const targetId = job.payload.targetId as string
-  if (!targetId) throw new Error("publish_post job is missing targetId")
+  if (!targetId) throw new NonRetryableJobError("publish_post job is missing targetId")
 
   const target = await getPostTarget(targetId)
-  if (!target) throw new Error(`Post target ${targetId} not found`)
+  if (!target) throw new NonRetryableJobError(`Post target ${targetId} not found`)
 
-  if (!isProviderId(target.provider)) throw new Error(`Unknown provider: ${target.provider}`)
+  if (!isProviderId(target.provider)) throw new NonRetryableJobError(`Unknown provider: ${target.provider}`)
 
   if (target.provider === "instagram") {
     const result = await publishToInstagram(target)
@@ -615,7 +618,7 @@ async function publishPostHandler(job: ClaimedJob): Promise<void> {
 
 function notYetImplemented(capability: string): JobHandler {
   return async () => {
-    throw new Error(`${capability} is architecture-ready but has no live provider connected yet`)
+    throw new NonRetryableJobError(`${capability} is architecture-ready but has no live provider connected yet`)
   }
 }
 

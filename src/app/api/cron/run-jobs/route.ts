@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { NextResponse } from "next/server"
-import { claimJobs, completeJob, failJob, type JobType } from "@/lib/jobs/queue"
+import { claimJobs, completeJob, failJob, NonRetryableJobError, type JobType } from "@/lib/jobs/queue"
 import { JOB_HANDLERS } from "@/lib/jobs/handlers"
 import { pruneExpiredOAuthStates, scheduleTokenRefreshes } from "@/lib/integrations/oauth"
 import { checkScheduledAutomations } from "@/lib/automations/engine"
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
           return { id: job.id, type: job.type, ok: true }
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unknown job error"
-          await failJob(job.id, job.attempts, job.maxAttempts, message)
+          await failJob(job.id, job.attempts, job.maxAttempts, message, error instanceof NonRetryableJobError)
           return { id: job.id, type: job.type, ok: false, error: message }
         }
       })

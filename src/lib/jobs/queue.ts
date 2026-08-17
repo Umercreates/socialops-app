@@ -25,6 +25,21 @@ export type JobType =
   | "instagram_poll_publish"
   | "tiktok_poll_publish"
 
+/** Thrown by a handler for a failure that no amount of retrying will ever
+ * fix - malformed job payload, missing/invalid credentials, a config that
+ * requires human action (connect a provider, fix an Agent ID). The worker
+ * (see /api/cron/run-jobs) fails the job immediately on this, skipping the
+ * exponential backoff a generic Error still gets - that backoff exists for
+ * genuinely transient failures (rate limits, 5xx, timeouts, network
+ * blips), not for errors where attempt 2 would fail for the exact same
+ * reason as attempt 1. */
+export class NonRetryableJobError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "NonRetryableJobError"
+  }
+}
+
 export interface EnqueueJobInput {
   workspaceId: string
   type: JobType
@@ -104,9 +119,12 @@ export async function completeJob(id: string): Promise<void> {
 
 /** Marks a job failed. Retries with exponential-ish backoff (2^attempts
  * minutes, capped) if attempts remain, otherwise marks it permanently
- * failed - never silently retries forever. */
-export async function failJob(id: string, attempts: number, maxAttempts: number, error: string): Promise<void> {
-  const exhausted = attempts >= maxAttempts
+ * failed - never silently retries forever. `nonRetryable` (see
+ * NonRetryableJobError) skips straight to permanently failed regardless of
+ * attempts remaining - retrying a config error on the same schedule as a
+ * rate limit just delays the failure notification for no benefit. */
+export async function failJob(id: string, attempts: number, maxAttempts: number, error: string, nonRetryable = false): Promise<void> {
+  const exhausted = nonRetryable || attempts >= maxAttempts
   const backoffMinutes = Math.min(60, 2 ** attempts)
   await withDb(async (db) => {
     await db
