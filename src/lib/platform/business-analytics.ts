@@ -35,83 +35,71 @@ export interface BusinessAnalyticsOverview {
   comments: { total: number; newLast7d: number; open: number }
 }
 
+/** Computes 8 workspace tables' worth of dashboard/analytics aggregates in
+ * ONE parallel batch (10 queries total, down from 21 across 8 sequential
+ * round trips in an earlier version). Every "total" is derived by summing
+ * its own status/stage breakdown in JS instead of a separate COUNT(*) -
+ * `stage`/`status` are NOT NULL columns, so a GROUP BY on them already
+ * partitions every row exactly once; summing it is exact, not an
+ * approximation. Same reasoning eliminated leads' separate qualified/won/
+ * lost counts - those are just specific rows already present in the
+ * `byStage` breakdown. Comments' three counts (total/new7d/open) use
+ * conditional aggregation (COUNT(*) FILTER) instead of three separate
+ * queries, since they don't share a common GROUP BY key. */
 export async function getBusinessAnalytics(workspaceId: string): Promise<BusinessAnalyticsOverview> {
   return withDb(async (db) => {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
-    const [leadTotal, leadNew30d, leadBySource, leadByStage, leadQualified, leadWon, leadLost] = await Promise.all([
-      db.select({ count: sql<number>`count(*)` }).from(leads).where(eq(leads.workspaceId, workspaceId)),
-      db.select({ count: sql<number>`count(*)` }).from(leads).where(and(eq(leads.workspaceId, workspaceId), gte(leads.createdAt, thirtyDaysAgo))),
-      db.select({ key: leads.sourcePlatform, count: sql<number>`count(*)` }).from(leads).where(eq(leads.workspaceId, workspaceId)).groupBy(leads.sourcePlatform),
-      db.select({ key: leads.stage, count: sql<number>`count(*)` }).from(leads).where(eq(leads.workspaceId, workspaceId)).groupBy(leads.stage),
-      db.select({ count: sql<number>`count(*)` }).from(leads).where(and(eq(leads.workspaceId, workspaceId), eq(leads.stage, "qualified"))),
-      db.select({ count: sql<number>`count(*)` }).from(leads).where(and(eq(leads.workspaceId, workspaceId), eq(leads.stage, "won"))),
-      db.select({ count: sql<number>`count(*)` }).from(leads).where(and(eq(leads.workspaceId, workspaceId), eq(leads.stage, "lost"))),
-    ])
-
-    const [callTotal, callByStatus] = await Promise.all([
-      db.select({ count: sql<number>`count(*)` }).from(calls).where(eq(calls.workspaceId, workspaceId)),
-      db.select({ key: calls.status, count: sql<number>`count(*)` }).from(calls).where(eq(calls.workspaceId, workspaceId)).groupBy(calls.status),
-    ])
-
-    const [meetingTotal, meetingByStatus] = await Promise.all([
-      db.select({ count: sql<number>`count(*)` }).from(meetings).where(eq(meetings.workspaceId, workspaceId)),
-      db.select({ key: meetings.status, count: sql<number>`count(*)` }).from(meetings).where(eq(meetings.workspaceId, workspaceId)).groupBy(meetings.status),
-    ])
-
-    const [postTotal, postByStatus] = await Promise.all([
-      db.select({ count: sql<number>`count(*)` }).from(posts).where(eq(posts.workspaceId, workspaceId)),
-      db.select({ key: posts.status, count: sql<number>`count(*)` }).from(posts).where(eq(posts.workspaceId, workspaceId)).groupBy(posts.status),
-    ])
-
-    const [targetTotal, targetByStatus] = await Promise.all([
-      db.select({ count: sql<number>`count(*)` }).from(postTargets).where(eq(postTargets.workspaceId, workspaceId)),
-      db.select({ key: postTargets.status, count: sql<number>`count(*)` }).from(postTargets).where(eq(postTargets.workspaceId, workspaceId)).groupBy(postTargets.status),
-    ])
-
-    const [runTotal, runByStatus] = await Promise.all([
-      db.select({ count: sql<number>`count(*)` }).from(automationRuns).where(eq(automationRuns.workspaceId, workspaceId)),
-      db.select({ key: automationRuns.status, count: sql<number>`count(*)` }).from(automationRuns).where(eq(automationRuns.workspaceId, workspaceId)).groupBy(automationRuns.status),
-    ])
-
-    const [conversationTotal] = await Promise.all([
-      db.select({ count: sql<number>`count(*)` }).from(whatsappConversations).where(eq(whatsappConversations.workspaceId, workspaceId)),
-    ])
-
-    const [commentTotal, commentNew7d, commentOpen] = await Promise.all([
-      db.select({ count: sql<number>`count(*)` }).from(comments).where(eq(comments.workspaceId, workspaceId)),
-      db.select({ count: sql<number>`count(*)` }).from(comments).where(and(eq(comments.workspaceId, workspaceId), gte(comments.createdAt, sevenDaysAgo))),
-      db.select({ count: sql<number>`count(*)` }).from(comments).where(and(eq(comments.workspaceId, workspaceId), eq(comments.status, "open"))),
-    ])
+    const [leadNew30d, leadBySource, leadByStage, callByStatus, meetingByStatus, postByStatus, targetByStatus, runByStatus, conversationTotal, commentCounts] =
+      await Promise.all([
+        db.select({ count: sql<number>`count(*)` }).from(leads).where(and(eq(leads.workspaceId, workspaceId), gte(leads.createdAt, thirtyDaysAgo))),
+        db.select({ key: leads.sourcePlatform, count: sql<number>`count(*)` }).from(leads).where(eq(leads.workspaceId, workspaceId)).groupBy(leads.sourcePlatform),
+        db.select({ key: leads.stage, count: sql<number>`count(*)` }).from(leads).where(eq(leads.workspaceId, workspaceId)).groupBy(leads.stage),
+        db.select({ key: calls.status, count: sql<number>`count(*)` }).from(calls).where(eq(calls.workspaceId, workspaceId)).groupBy(calls.status),
+        db.select({ key: meetings.status, count: sql<number>`count(*)` }).from(meetings).where(eq(meetings.workspaceId, workspaceId)).groupBy(meetings.status),
+        db.select({ key: posts.status, count: sql<number>`count(*)` }).from(posts).where(eq(posts.workspaceId, workspaceId)).groupBy(posts.status),
+        db.select({ key: postTargets.status, count: sql<number>`count(*)` }).from(postTargets).where(eq(postTargets.workspaceId, workspaceId)).groupBy(postTargets.status),
+        db.select({ key: automationRuns.status, count: sql<number>`count(*)` }).from(automationRuns).where(eq(automationRuns.workspaceId, workspaceId)).groupBy(automationRuns.status),
+        db.select({ count: sql<number>`count(*)` }).from(whatsappConversations).where(eq(whatsappConversations.workspaceId, workspaceId)),
+        db
+          .select({
+            total: sql<number>`count(*)`,
+            newLast7d: sql<number>`count(*) filter (where ${comments.createdAt} >= ${sevenDaysAgo})`,
+            open: sql<number>`count(*) filter (where ${comments.status} = 'open')`,
+          })
+          .from(comments)
+          .where(eq(comments.workspaceId, workspaceId)),
+      ])
 
     const bucket = (rows: { key: string; count: number }[], key: string) => Number(rows.find((r) => r.key === key)?.count ?? 0)
+    const sumCounts = (rows: { count: number }[]) => rows.reduce((total, r) => total + Number(r.count), 0)
 
     return {
       leads: {
-        total: Number(leadTotal[0]?.count ?? 0),
+        total: sumCounts(leadByStage),
         newLast30d: Number(leadNew30d[0]?.count ?? 0),
         bySource: leadBySource.map((r) => ({ key: r.key, count: Number(r.count) })),
         byStage: leadByStage.map((r) => ({ key: r.key, count: Number(r.count) })),
-        qualified: Number(leadQualified[0]?.count ?? 0),
-        won: Number(leadWon[0]?.count ?? 0),
-        lost: Number(leadLost[0]?.count ?? 0),
+        qualified: bucket(leadByStage, "qualified"),
+        won: bucket(leadByStage, "won"),
+        lost: bucket(leadByStage, "lost"),
       },
       calls: {
-        total: Number(callTotal[0]?.count ?? 0),
+        total: sumCounts(callByStatus),
         completed: bucket(callByStatus, "completed"),
         failed: bucket(callByStatus, "failed"),
         blocked: bucket(callByStatus, "blocked"),
       },
       meetings: {
-        total: Number(meetingTotal[0]?.count ?? 0),
+        total: sumCounts(meetingByStatus),
         scheduled: bucket(meetingByStatus, "scheduled"),
         completed: bucket(meetingByStatus, "completed"),
         cancelled: bucket(meetingByStatus, "cancelled"),
         failed: bucket(meetingByStatus, "failed"),
       },
       posts: {
-        total: Number(postTotal[0]?.count ?? 0),
+        total: sumCounts(postByStatus),
         published: bucket(postByStatus, "published"),
         failed: bucket(postByStatus, "failed"),
         partiallyFailed: bucket(postByStatus, "partially_failed"),
@@ -119,13 +107,13 @@ export async function getBusinessAnalytics(workspaceId: string): Promise<Busines
         draft: bucket(postByStatus, "draft"),
       },
       postTargets: {
-        total: Number(targetTotal[0]?.count ?? 0),
+        total: sumCounts(targetByStatus),
         published: bucket(targetByStatus, "published"),
         failed: bucket(targetByStatus, "failed"),
         blocked: bucket(targetByStatus, "blocked"),
       },
       automationRuns: {
-        total: Number(runTotal[0]?.count ?? 0),
+        total: sumCounts(runByStatus),
         completed: bucket(runByStatus, "completed"),
         blocked: bucket(runByStatus, "blocked"),
         failed: bucket(runByStatus, "failed"),
@@ -133,9 +121,9 @@ export async function getBusinessAnalytics(workspaceId: string): Promise<Busines
       },
       conversations: { total: Number(conversationTotal[0]?.count ?? 0) },
       comments: {
-        total: Number(commentTotal[0]?.count ?? 0),
-        newLast7d: Number(commentNew7d[0]?.count ?? 0),
-        open: Number(commentOpen[0]?.count ?? 0),
+        total: Number(commentCounts[0]?.total ?? 0),
+        newLast7d: Number(commentCounts[0]?.newLast7d ?? 0),
+        open: Number(commentCounts[0]?.open ?? 0),
       },
     }
   })
