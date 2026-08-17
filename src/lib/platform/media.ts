@@ -66,6 +66,19 @@ export async function getMediaAsset(workspaceId: string, id: string): Promise<Me
   })
 }
 
+/** Unscoped lookup - exists only for the signed public-media route, where
+ * a valid HMAC signature over this exact id is what proves the caller was
+ * already authorized (by server code that itself checked workspace
+ * ownership when it issued the signature), not a session's own
+ * workspaceId. Never call this from a session-authenticated route - use
+ * getMediaAsset there. */
+export async function getMediaAssetById(id: string): Promise<MediaAsset | null> {
+  return withDb(async (db) => {
+    const rows = await db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).limit(1)
+    return rows[0] ? rowToAsset(rows[0]) : null
+  })
+}
+
 export async function deleteMediaAsset(workspaceId: string, id: string): Promise<void> {
   await withDb(async (db) => {
     await db.delete(mediaAssets).where(and(eq(mediaAssets.id, id), eq(mediaAssets.workspaceId, workspaceId)))

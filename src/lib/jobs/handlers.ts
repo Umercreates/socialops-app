@@ -6,10 +6,13 @@ import { refreshAccessToken } from "@/lib/integrations/oauth"
 import { resolveActiveConnection } from "@/lib/integrations/credential-resolution"
 import { dispatchCall } from "@/lib/integrations/omnidimension/client"
 import { publishTextPost, publishImagePost, publishVideoPost } from "@/lib/integrations/facebook/client"
+import { getLinkedInstagramAccount, publishInstagramImage } from "@/lib/integrations/instagram/client"
 import { getCall, markCallDispatched, markCallFailed } from "@/lib/platform/calls"
 import { getPost, getPostTarget, markPostTargetResult, recomputePostStatus, type PostTargetRow } from "@/lib/platform/posts"
 import { getMediaAsset } from "@/lib/platform/media"
 import { getStorageAdapter } from "@/lib/storage/local-adapter"
+import { buildPublicMediaUrl } from "@/lib/storage/public-url"
+import { requireAppOrigin } from "@/lib/app-url"
 
 /**
  * One handler per job type. Every handler that would touch a real external
@@ -149,13 +152,64 @@ async function publishToFacebook(
   return { status: "published", externalPostId: result.externalPostId }
 }
 
+/** Instagram professional accounts are always linked through a Facebook
+ * Page - there is no separate Instagram credential to check here, so this
+ * deliberately resolves the Facebook connection instead of Instagram's
+ * own (unused for publishing) integration_connections row. Only a single
+ * image is supported: Instagram's Content Publishing API needs a publicly
+ * fetchable image_url (this app's own media is normally kept behind
+ * authenticated retrieval - buildPublicMediaUrl is the one narrow,
+ * signed, time-limited exception made for exactly this), and video
+ * containers need async status polling this app doesn't implement, so
+ * video is honestly blocked rather than half-built. */
+async function publishToInstagram(
+  target: PostTargetRow
+): Promise<{ status: "published" | "failed" | "blocked"; externalPostId?: string; errorMessage?: string }> {
+  const { live, row } = await resolveActiveConnection(target.workspaceId, "facebook")
+  const pageId = row?.config?.pageId
+  const { value: pageAccessToken } = resolveCredentialValue(row, "pageAccessToken", "facebook")
+  if (!live || typeof pageId !== "string" || !pageAccessToken) {
+    return { status: "blocked", errorMessage: "Instagram publishing needs a connected Facebook Page - connect Facebook and select a Page in Integrations." }
+  }
+
+  const linked = await getLinkedInstagramAccount(pageId, pageAccessToken)
+  if (!linked.ok || !linked.igUserId) {
+    return { status: "blocked", errorMessage: linked.error ?? "This Facebook Page has no linked Instagram professional account." }
+  }
+
+  const post = await getPost(target.workspaceId, target.postId)
+  if (!post) return { status: "failed", errorMessage: "Parent post no longer exists." }
+
+  if (post.media.length === 0) return { status: "blocked", errorMessage: "Instagram requires an attached image - text-only posts aren't supported." }
+  if (post.media.length > 1) return { status: "blocked", errorMessage: "Instagram publishing supports at most one attached image right now (no carousel support yet)." }
+
+  const media = post.media[0]
+  if (!media.mediaAssetId) return { status: "blocked", errorMessage: "This post's attached media hasn't finished uploading - try publishing again in a moment." }
+  const asset = await getMediaAsset(target.workspaceId, media.mediaAssetId)
+  if (!asset) return { status: "failed", errorMessage: "The attached media file no longer exists." }
+  if (asset.mediaType === "video") return { status: "blocked", errorMessage: "Instagram video publishing isn't implemented yet - only images are supported." }
+
+  const variant = post.variants.find((v) => v.platform === "instagram" && v.enabled)
+  const caption = variant
+    ? [variant.caption, variant.hashtags].filter(Boolean).join("\n\n")
+    : [post.baseCaption, post.baseHashtags].filter(Boolean).join("\n\n")
+
+  const imageUrl = buildPublicMediaUrl(requireAppOrigin(), asset.id)
+  const result = await publishInstagramImage(linked.igUserId, pageAccessToken, imageUrl, caption)
+  if (!result.ok) return { status: "failed", errorMessage: result.errorMessage ?? "Instagram publish failed" }
+  return { status: "published", externalPostId: result.externalPostId }
+}
+
 /** Resolves one post_target: never publishes without a genuinely live
  * workspace connection for that target's provider (recording an honest
  * "blocked" result and rolling the parent post's status up, exactly like
- * the queue never faking success elsewhere). Facebook text posts have a
- * real adapter (see publishToFacebook); every other provider still has no
- * publish adapter and reaches an honest "not yet implemented" result
- * rather than a fabricated success. */
+ * the queue never faking success elsewhere). Facebook and Instagram have
+ * real adapters (see publishToFacebook/publishToInstagram); every other
+ * provider still has no publish adapter and reaches an honest "not yet
+ * implemented" result rather than a fabricated success. Instagram is
+ * handled before the generic connection gate below since it never has its
+ * own live integration_connections row - its readiness check happens
+ * inside publishToInstagram against the Facebook connection instead. */
 async function publishPostHandler(job: ClaimedJob): Promise<void> {
   const targetId = job.payload.targetId as string
   if (!targetId) throw new Error("publish_post job is missing targetId")
@@ -164,6 +218,13 @@ async function publishPostHandler(job: ClaimedJob): Promise<void> {
   if (!target) throw new Error(`Post target ${targetId} not found`)
 
   if (!isProviderId(target.provider)) throw new Error(`Unknown provider: ${target.provider}`)
+
+  if (target.provider === "instagram") {
+    const result = await publishToInstagram(target)
+    await markPostTargetResult(targetId, result)
+    await recomputePostStatus(target.workspaceId, target.postId)
+    return
+  }
 
   const { live, row } = await resolveActiveConnection(target.workspaceId, target.provider)
   if (!live) {

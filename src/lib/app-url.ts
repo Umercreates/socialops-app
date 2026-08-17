@@ -13,3 +13,14 @@ export function getAppOrigin(request: Request): string {
   if (configured) return configured.replace(/\/+$/, "")
   return new URL(request.url).origin
 }
+
+/** For code with no incoming Request to fall back to - background job
+ * handlers, for instance, which run from a cron dispatch rather than a
+ * browser/external request. Requires APP_URL to be set (already required
+ * in production for OAuth to work at all); throws rather than guessing,
+ * since there's no safe fallback origin to hand to an external party. */
+export function requireAppOrigin(): string {
+  const configured = process.env.APP_URL?.trim()
+  if (!configured) throw new Error("APP_URL is not configured")
+  return configured.replace(/\/+$/, "")
+}
