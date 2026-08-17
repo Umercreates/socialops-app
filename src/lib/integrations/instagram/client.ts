@@ -13,10 +13,12 @@ const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
 export interface LinkedInstagramAccountResult {
   ok: boolean
   igUserId?: string
+  username?: string
+  profilePictureUrl?: string
   error?: string
 }
 
-/** GET /{page-id}?fields=instagram_business_account - an Instagram
+/** GET /{page-id}?fields=instagram_business_account{...} - an Instagram
  * professional account is always linked through a Facebook Page, so this
  * is how a workspace's already-selected Facebook Page resolves to the
  * Instagram account it can publish to, without a separate Instagram
@@ -25,7 +27,7 @@ export interface LinkedInstagramAccountResult {
 export async function getLinkedInstagramAccount(pageId: string, pageAccessToken: string): Promise<LinkedInstagramAccountResult> {
   try {
     const url = new URL(`${GRAPH_API_BASE}/${pageId}`)
-    url.searchParams.set("fields", "instagram_business_account")
+    url.searchParams.set("fields", "instagram_business_account{id,username,profile_picture_url}")
 
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${pageAccessToken}` },
@@ -36,9 +38,10 @@ export async function getLinkedInstagramAccount(pageId: string, pageAccessToken:
     if (res.status === 401) return { ok: false, error: "Facebook access token is invalid or expired - reconnect Facebook." }
     if (!res.ok) return { ok: false, error: json?.error?.message ?? `Facebook API returned ${res.status}` }
 
-    const igUserId = json?.instagram_business_account?.id as string | undefined
+    const account = json?.instagram_business_account
+    const igUserId = account?.id as string | undefined
     if (!igUserId) return { ok: false, error: "This Facebook Page has no linked Instagram professional account." }
-    return { ok: true, igUserId }
+    return { ok: true, igUserId, username: account.username, profilePictureUrl: account.profile_picture_url }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Couldn't reach the Facebook API." }
   }

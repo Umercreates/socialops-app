@@ -3,7 +3,8 @@ import { z } from "zod"
 import { requireAuth, requireRole } from "@/lib/auth/guard"
 import { verifySameOrigin } from "@/lib/auth/csrf"
 import { resolveActiveConnection } from "@/lib/integrations/credential-resolution"
-import { upsertConnection } from "@/lib/integrations/repository"
+import { upsertConnection, getConnection } from "@/lib/integrations/repository"
+import { upsertSocialAccount } from "@/lib/platform/social-accounts"
 import { apiError } from "@/lib/api/errors"
 
 /** Which identity (the member themselves, or a company Page they
@@ -54,6 +55,17 @@ export async function PUT(request: Request) {
       workspaceId: auth.ctx.workspaceId,
       provider: "linkedin",
       config: { authorUrn: body.authorUrn, authorName: body.authorName ?? null, authorType: body.authorType },
+    })
+
+    const linkedinConnection = await getConnection(auth.ctx.workspaceId, "linkedin")
+    await upsertSocialAccount({
+      workspaceId: auth.ctx.workspaceId,
+      provider: "linkedin",
+      integrationConnectionId: linkedinConnection?.id ?? null,
+      externalAccountId: body.authorUrn,
+      accountName: body.authorName ?? body.authorUrn,
+      accountType: body.authorType,
+      capabilities: ["publishing"],
     })
 
     return NextResponse.json({ selection: { authorUrn: body.authorUrn, authorName: body.authorName ?? null, authorType: body.authorType } })

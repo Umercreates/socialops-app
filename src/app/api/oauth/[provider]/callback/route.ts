@@ -1,10 +1,67 @@
 import { NextResponse } from "next/server"
-import { isProviderId } from "@/lib/integrations/providers"
+import { isProviderId, type ProviderId } from "@/lib/integrations/providers"
 import { getConnection, recordAuditEvent } from "@/lib/integrations/repository"
 import { resolveCredentialValue, storeOAuthTokens } from "@/lib/integrations/service"
 import { consumeOAuthState, exchangeCodeForToken } from "@/lib/integrations/oauth"
+import { upsertSocialAccount } from "@/lib/platform/social-accounts"
+import { getCreatorInfo } from "@/lib/integrations/tiktok/client"
+import { listMyChannels } from "@/lib/integrations/youtube/client"
+import { getMe } from "@/lib/integrations/x/client"
 import { getAppOrigin } from "@/lib/app-url"
 import { apiError } from "@/lib/api/errors"
+
+/**
+ * TikTok, YouTube, and X have no separate "pick which account" step the way
+ * Facebook Pages and LinkedIn identities do - the OAuth grant already
+ * identifies exactly one account to publish as, so the social_accounts row
+ * a client needs to actually target this account from the Composer is
+ * created right here, automatically, instead of requiring a manual step
+ * that doesn't otherwise exist. Never blocks the OAuth flow itself on
+ * failure - a client can still retry discovery via Test Connection.
+ */
+async function syncDiscoveredSocialAccount(workspaceId: string, provider: ProviderId, connectionId: string, accessToken: string): Promise<void> {
+  try {
+    if (provider === "tiktok") {
+      const result = await getCreatorInfo(accessToken)
+      if (!result.ok || !result.creatorUsername) return
+      await upsertSocialAccount({
+        workspaceId,
+        provider: "tiktok",
+        integrationConnectionId: connectionId,
+        externalAccountId: result.creatorUsername,
+        accountName: result.creatorUsername,
+        username: result.creatorUsername,
+        capabilities: ["publishing"],
+      })
+    } else if (provider === "youtube") {
+      const result = await listMyChannels(accessToken)
+      const channel = result.ok ? result.channels?.[0] : undefined
+      if (!channel) return
+      await upsertSocialAccount({
+        workspaceId,
+        provider: "youtube",
+        integrationConnectionId: connectionId,
+        externalAccountId: channel.id,
+        accountName: channel.title,
+        capabilities: ["publishing"],
+      })
+    } else if (provider === "x") {
+      const result = await getMe(accessToken)
+      if (!result.ok || !result.userId) return
+      await upsertSocialAccount({
+        workspaceId,
+        provider: "x",
+        integrationConnectionId: connectionId,
+        externalAccountId: result.userId,
+        accountName: result.username ?? result.userId,
+        username: result.username,
+        capabilities: ["publishing"],
+      })
+    }
+  } catch (error) {
+    console.error(`Post-OAuth account discovery failed for ${provider}:`, error instanceof Error ? error.message : error)
+  }
+}
 
 /**
  * OAuth callback - the provider redirects the browser here after the user
@@ -67,6 +124,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ provider: s
       refreshToken: exchange.refreshToken,
       expiresInSeconds: exchange.expiresInSeconds,
     })
+
+    if (provider === "tiktok" || provider === "youtube" || provider === "x") {
+      const savedRow = await getConnection(consumed.workspaceId, provider)
+      if (savedRow) await syncDiscoveredSocialAccount(consumed.workspaceId, provider, savedRow.id, exchange.accessToken)
+    }
 
     return NextResponse.redirect(`${redirectBase}?oauth=connected&provider=${provider}`)
   } catch (error) {

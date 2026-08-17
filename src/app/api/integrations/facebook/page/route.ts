@@ -4,9 +4,11 @@ import { requireAuth, requireRole } from "@/lib/auth/guard"
 import { verifySameOrigin } from "@/lib/auth/csrf"
 import { resolveActiveConnection } from "@/lib/integrations/credential-resolution"
 import { resolveCredentialValue } from "@/lib/integrations/service"
-import { upsertConnection } from "@/lib/integrations/repository"
+import { upsertConnection, getConnection } from "@/lib/integrations/repository"
 import { encryptSecret } from "@/lib/integrations/crypto"
 import { listFacebookPages } from "@/lib/integrations/facebook/client"
+import { getLinkedInstagramAccount } from "@/lib/integrations/instagram/client"
+import { upsertSocialAccount } from "@/lib/platform/social-accounts"
 import { apiError } from "@/lib/api/errors"
 
 /** Which Facebook Page this workspace publishes to - stored on the existing
@@ -63,7 +65,34 @@ export async function PUT(request: Request) {
       secretDataEncrypted: { pageAccessToken: encryptSecret(page.accessToken).blob },
     })
 
-    return NextResponse.json({ selection: { pageId: page.id, pageName: page.name } })
+    const facebookConnection = await getConnection(auth.ctx.workspaceId, "facebook")
+    await upsertSocialAccount({
+      workspaceId: auth.ctx.workspaceId,
+      provider: "facebook",
+      integrationConnectionId: facebookConnection?.id ?? null,
+      externalAccountId: page.id,
+      accountName: page.name,
+      capabilities: ["publishing", "comments"],
+    })
+
+    // Instagram publishing "just works" once the connected Page has a
+    // linked professional account - no separate Instagram OAuth grant, so
+    // this is the only place its social_accounts row gets created/updated.
+    const instagramAccount = await getLinkedInstagramAccount(page.id, page.accessToken)
+    if (instagramAccount.ok && instagramAccount.igUserId) {
+      await upsertSocialAccount({
+        workspaceId: auth.ctx.workspaceId,
+        provider: "instagram",
+        integrationConnectionId: facebookConnection?.id ?? null,
+        externalAccountId: instagramAccount.igUserId,
+        accountName: instagramAccount.username ?? instagramAccount.igUserId,
+        username: instagramAccount.username,
+        avatarUrl: instagramAccount.profilePictureUrl,
+        capabilities: ["publishing", "comments"],
+      })
+    }
+
+    return NextResponse.json({ selection: { pageId: page.id, pageName: page.name }, instagramLinked: Boolean(instagramAccount.ok) })
   } catch (error) {
     return apiError(error, "Failed to save Facebook Page selection")
   }

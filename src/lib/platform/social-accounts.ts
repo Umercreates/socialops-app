@@ -118,3 +118,17 @@ export async function disconnectSocialAccount(workspaceId: string, accountId: st
       .where(and(eq(socialAccounts.id, accountId), eq(socialAccounts.workspaceId, workspaceId)))
   })
 }
+
+/** Marks every social_accounts row for a provider disconnected - used when
+ * the underlying integration_connections row is disabled/removed, so an
+ * account never keeps showing as connected (and selectable to publish to)
+ * after its credentials are gone. Row itself is kept, never deleted -
+ * publish history stays intact. */
+export async function disconnectSocialAccountsByProvider(workspaceId: string, provider: string): Promise<void> {
+  await withDb(async (db) => {
+    await db
+      .update(socialAccounts)
+      .set({ status: "disconnected", updatedAt: new Date() })
+      .where(and(eq(socialAccounts.workspaceId, workspaceId), eq(socialAccounts.provider, provider)))
+  })
+}

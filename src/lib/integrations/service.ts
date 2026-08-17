@@ -10,6 +10,7 @@ import {
 } from "./repository"
 import { resolveCredentialValue } from "./credential-resolution"
 import { evaluateProviderReadiness, computeReadiness, type ProviderReadiness } from "./readiness"
+import { disconnectSocialAccountsByProvider } from "@/lib/platform/social-accounts"
 
 export { resolveCredentialValue }
 
@@ -221,14 +222,28 @@ export async function storeOAuthTokens(input: StoreOAuthTokensInput): Promise<Pr
   return getProviderView(input.workspaceId, input.provider)
 }
 
+/** Providers whose social_accounts rows should be marked disconnected
+ * alongside the integration itself - includes "instagram" on a facebook
+ * disable/removal since Instagram publishing rides on the Facebook
+ * connection rather than having its own. */
+function dependentSocialAccountProviders(provider: ProviderId): string[] {
+  return provider === "facebook" ? ["facebook", "instagram"] : [provider]
+}
+
 export async function disableConnection(workspaceId: string, provider: ProviderId, actorUserId: string): Promise<void> {
   await upsertConnection({ workspaceId, provider, mode: "disabled", status: "disabled" })
   await recordAuditEvent(workspaceId, provider, "integration_disabled", actorUserId)
+  for (const p of dependentSocialAccountProviders(provider)) {
+    await disconnectSocialAccountsByProvider(workspaceId, p)
+  }
 }
 
 export async function removeConnection(workspaceId: string, provider: ProviderId, actorUserId: string): Promise<void> {
   await deleteConnection(workspaceId, provider)
   await recordAuditEvent(workspaceId, provider, "integration_deleted", actorUserId)
+  for (const p of dependentSocialAccountProviders(provider)) {
+    await disconnectSocialAccountsByProvider(workspaceId, p)
+  }
 }
 
 export interface TestConnectionResult {
