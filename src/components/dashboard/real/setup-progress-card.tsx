@@ -19,7 +19,7 @@ interface SetupProgressCardProps {
  * honest checklist instead of a wall of demo numbers. */
 export function SetupProgressCard({ configuredProviders, totalProviders, items }: SetupProgressCardProps) {
   return (
-    <Card className="gap-3 border-brand/30 bg-brand/[0.03] px-4 py-4 sm:px-5 sm:py-5">
+    <Card className="gap-3 border-brand/30 bg-brand/3 px-4 py-4 sm:px-5 sm:py-5">
       <CardHeader className="flex-row items-center justify-between px-0">
         <CardTitle className="text-[15px]">Setup progress</CardTitle>
         <span className="text-xs font-medium tabular-nums text-muted-foreground">
@@ -37,8 +37,8 @@ export function SetupProgressCard({ configuredProviders, totalProviders, items }
             <span className={cn(item.done ? "text-foreground" : "text-muted-foreground")}>{item.label}</span>
           </div>
         ))}
-        <Link href="/dashboard/integrations" prefetch={false} className="mt-1 text-xs font-medium text-brand hover:underline">
-          Finish setup in Integrations
+        <Link href="/dashboard/onboarding" prefetch={false} className="mt-1 text-xs font-medium text-brand hover:underline">
+          View full getting-started checklist
         </Link>
       </CardContent>
     </Card>
