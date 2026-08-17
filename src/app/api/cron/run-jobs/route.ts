@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { claimJobs, completeJob, failJob, type JobType } from "@/lib/jobs/queue"
 import { JOB_HANDLERS } from "@/lib/jobs/handlers"
 import { pruneExpiredOAuthStates, scheduleTokenRefreshes } from "@/lib/integrations/oauth"
+import { checkScheduledAutomations } from "@/lib/automations/engine"
 import { apiError } from "@/lib/api/errors"
 
 /**
@@ -47,8 +48,15 @@ export async function POST(request: Request) {
 
     const prunedStates = await pruneExpiredOAuthStates()
     const scheduledRefreshes = await scheduleTokenRefreshes()
+    const scheduledAutomationsFired = await checkScheduledAutomations()
 
-    return NextResponse.json({ claimed: batch.length, results, prunedOAuthStates: prunedStates, scheduledRefreshes })
+    return NextResponse.json({
+      claimed: batch.length,
+      results,
+      prunedOAuthStates: prunedStates,
+      scheduledRefreshes,
+      scheduledAutomationsFired,
+    })
   } catch (error) {
     return apiError(error, "Cron worker run failed")
   }

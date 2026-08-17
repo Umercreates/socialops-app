@@ -319,6 +319,7 @@ export const automationRuns = socialops.table("automation_runs", {
   triggerContext: jsonb("trigger_context"),
   status: text("status").notNull().default("running"),
   errorMessage: text("error_message"),
+  dedupeKey: text("dedupe_key"),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
 })

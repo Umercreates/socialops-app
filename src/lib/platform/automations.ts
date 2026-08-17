@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { and, eq } from "drizzle-orm"
+import { and, eq, desc } from "drizzle-orm"
 import { withDb } from "@/lib/db/client"
 import { automations, automationRuns } from "@/lib/db/schema"
 import type { Automation, AutomationStatus, AutomationStep, AutomationTriggerType, AutomationConditionType, AutomationActionType, AutomationRules, SocialPlatform } from "@/types"
@@ -82,30 +82,76 @@ export async function deleteAutomation(workspaceId: string, id: string): Promise
   })
 }
 
+export interface AutomationRun {
+  id: string
+  automationId: string
+  status: string
+  errorMessage: string | null
+  triggerContext: Record<string, unknown> | null
+  startedAt: string
+  completedAt: string | null
+}
+
+function rowToRun(row: typeof automationRuns.$inferSelect): AutomationRun {
+  return {
+    id: row.id,
+    automationId: row.automationId,
+    status: row.status,
+    errorMessage: row.errorMessage,
+    triggerContext: row.triggerContext as Record<string, unknown> | null,
+    startedAt: row.startedAt.toISOString(),
+    completedAt: row.completedAt?.toISOString() ?? null,
+  }
+}
+
+/** True if this exact automation has already recorded a run for this
+ * dedupe key - the engine's guard against firing the same automation
+ * twice for the same underlying event (a retried job, a duplicate
+ * webhook delivery, etc). A dedupe key is caller-supplied and should
+ * identify the *event*, not the automation - e.g. an inbound message's
+ * own id, not a random uuid generated per dispatch. */
+export async function hasRunForDedupeKey(automationId: string, dedupeKey: string): Promise<boolean> {
+  return withDb(async (db) => {
+    const rows = await db
+      .select({ id: automationRuns.id })
+      .from(automationRuns)
+      .where(and(eq(automationRuns.automationId, automationId), eq(automationRuns.dedupeKey, dedupeKey)))
+      .limit(1)
+    return rows.length > 0
+  })
+}
+
 /**
  * Records an automation run. Before ANY provider-facing action executes,
  * the caller must have already confirmed the relevant provider is
  * connected/live - a run against a provider that isn't ready gets recorded
  * as "blocked" with a clear reason, never silently treated as if the
- * external action happened.
+ * external action happened. "pending-approval" is a real, incomplete state
+ * (manual-approval mode automations stop here until a human approves) -
+ * only "completed" counts toward runsLast30d/lastRunAt.
  */
 export async function recordAutomationRun(
   workspaceId: string,
   automationId: string,
-  status: "completed" | "blocked" | "failed",
+  status: "completed" | "blocked" | "failed" | "skipped" | "pending-approval",
   errorMessage?: string,
-  triggerContext?: Record<string, unknown>
-): Promise<void> {
-  await withDb(async (db) => {
-    await db.insert(automationRuns).values({
-      id: randomUUID(),
-      automationId,
-      workspaceId,
-      triggerContext: triggerContext ?? null,
-      status,
-      errorMessage,
-      completedAt: new Date(),
-    })
+  triggerContext?: Record<string, unknown>,
+  dedupeKey?: string
+): Promise<string> {
+  return withDb(async (db) => {
+    const [row] = await db
+      .insert(automationRuns)
+      .values({
+        id: randomUUID(),
+        automationId,
+        workspaceId,
+        triggerContext: triggerContext ?? null,
+        status,
+        errorMessage,
+        dedupeKey,
+        completedAt: status === "pending-approval" ? undefined : new Date(),
+      })
+      .returning({ id: automationRuns.id })
 
     if (status === "completed") {
       const [current] = await db.select({ runsLast30d: automations.runsLast30d }).from(automations).where(eq(automations.id, automationId))
@@ -114,5 +160,87 @@ export async function recordAutomationRun(
         .set({ runsLast30d: (current?.runsLast30d ?? 0) + 1, lastRunAt: new Date(), updatedAt: new Date() })
         .where(eq(automations.id, automationId))
     }
+
+    return row.id
+  })
+}
+
+export async function resolveAutomationRun(
+  runId: string,
+  status: "completed" | "blocked" | "failed",
+  errorMessage?: string
+): Promise<AutomationRun | null> {
+  return withDb(async (db) => {
+    const [row] = await db
+      .update(automationRuns)
+      .set({ status, errorMessage, completedAt: new Date() })
+      .where(eq(automationRuns.id, runId))
+      .returning()
+    if (!row) return null
+
+    if (status === "completed") {
+      const [current] = await db.select({ runsLast30d: automations.runsLast30d }).from(automations).where(eq(automations.id, row.automationId))
+      await db
+        .update(automations)
+        .set({ runsLast30d: (current?.runsLast30d ?? 0) + 1, lastRunAt: new Date(), updatedAt: new Date() })
+        .where(eq(automations.id, row.automationId))
+    }
+
+    return rowToRun(row)
+  })
+}
+
+export async function getAutomationRun(workspaceId: string, runId: string): Promise<AutomationRun | null> {
+  return withDb(async (db) => {
+    const rows = await db
+      .select()
+      .from(automationRuns)
+      .where(and(eq(automationRuns.id, runId), eq(automationRuns.workspaceId, workspaceId)))
+      .limit(1)
+    return rows[0] ? rowToRun(rows[0]) : null
+  })
+}
+
+export async function listAutomationRuns(workspaceId: string, automationId: string, limit = 50): Promise<AutomationRun[]> {
+  return withDb(async (db) => {
+    const rows = await db
+      .select()
+      .from(automationRuns)
+      .where(and(eq(automationRuns.workspaceId, workspaceId), eq(automationRuns.automationId, automationId)))
+      .orderBy(desc(automationRuns.startedAt))
+      .limit(limit)
+    return rows.map(rowToRun)
+  })
+}
+
+export async function getAutomation(workspaceId: string, id: string): Promise<Automation | null> {
+  return withDb(async (db) => {
+    const rows = await db.select().from(automations).where(and(eq(automations.id, id), eq(automations.workspaceId, workspaceId))).limit(1)
+    return rows[0] ? rowToAutomation(rows[0]) : null
+  })
+}
+
+/** All active automations for a workspace matching a given trigger type -
+ * the engine's entry point for finding candidates to evaluate against a
+ * real event. Paused/draft automations never match. */
+export async function listActiveAutomationsForTrigger(workspaceId: string, triggerType: AutomationTriggerType): Promise<Automation[]> {
+  return withDb(async (db) => {
+    const rows = await db.select().from(automations).where(and(eq(automations.workspaceId, workspaceId), eq(automations.status, "active")))
+    return rows.map(rowToAutomation).filter((a) => a.trigger.type === triggerType)
+  })
+}
+
+/** Cross-workspace variant for the cron-driven "scheduled" trigger, which
+ * has no single triggering workspace request to scope the lookup to - the
+ * worker has to sweep every workspace's active automations of this type
+ * each tick. */
+export async function listAllActiveAutomationsByTriggerType(
+  triggerType: AutomationTriggerType
+): Promise<{ workspaceId: string; automation: Automation }[]> {
+  return withDb(async (db) => {
+    const rows = await db.select().from(automations).where(eq(automations.status, "active"))
+    return rows
+      .filter((row) => (row.trigger as AutomationStep<AutomationTriggerType>).type === triggerType)
+      .map((row) => ({ workspaceId: row.workspaceId, automation: rowToAutomation(row) }))
   })
 }

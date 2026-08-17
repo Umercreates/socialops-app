@@ -3,6 +3,7 @@ import { recordWebhookEvent, markWebhookEventProcessed } from "@/lib/integration
 import { applyCallWebhookResult } from "@/lib/platform/calls"
 import { createActivity } from "@/lib/leads/repository"
 import { createNotification } from "@/lib/platform/notifications"
+import { dispatchAutomationEvent } from "@/lib/automations/engine"
 import type { CallStatus, CallSummary, CallTranscriptLine } from "@/types"
 
 /**
@@ -115,6 +116,13 @@ export async function POST(request: Request) {
     type: "call-completed",
     title: "Call completed",
     description: report.summary ?? "An OmniDimension call has finished - review the transcript and summary.",
+  })
+
+  await dispatchAutomationEvent("call-completed", {
+    workspaceId: result.workspaceId,
+    leadId: result.leadId ?? undefined,
+    sentiment: report.sentiment,
+    dedupeKey: providerCallId,
   })
 
   return NextResponse.json({ ok: true, matched: true })

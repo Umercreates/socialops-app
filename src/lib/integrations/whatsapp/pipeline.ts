@@ -12,6 +12,7 @@ import {
 import { sendWhatsAppTextMessage } from "./cloud-api"
 import { runQualificationTurn, scoreQualification, type KnownQualification, type ConversationTurn } from "./gemini-qualification"
 import { resolveActiveApiKey } from "@/lib/integrations/credential-resolution"
+import { dispatchAutomationEvent } from "@/lib/automations/engine"
 
 const STAGE_ORDER: LeadStage[] = ["whatsapp-started", "qualifying", "interested", "qualified", "ready-for-sales"]
 
@@ -91,6 +92,11 @@ export async function processInboundMessage(msg: InboundTextMessage): Promise<{ 
       status: "cold",
     })
     await createActivity(msg.workspaceId, lead.id, null, "whatsapp-started", "Started a WhatsApp conversation")
+    await dispatchAutomationEvent("whatsapp-started", {
+      workspaceId: msg.workspaceId,
+      leadId: lead.id,
+      dedupeKey: msg.externalMessageId,
+    })
   }
   if (!conversation.leadId) {
     await updateConversation(msg.workspaceId, conversation.id, { leadId: lead.id })
@@ -100,6 +106,12 @@ export async function processInboundMessage(msg: InboundTextMessage): Promise<{ 
   if (msg.body) {
     const snippet = msg.body.length > 140 ? `${msg.body.slice(0, 140)}…` : msg.body
     await createActivity(msg.workspaceId, leadId, null, "whatsapp-message", `Customer: ${snippet}`)
+    await dispatchAutomationEvent("new-dm", {
+      workspaceId: msg.workspaceId,
+      leadId,
+      messageBody: msg.body,
+      dedupeKey: msg.externalMessageId,
+    })
   }
 
   // Non-text messages and already-escalated conversations are stored but
@@ -142,6 +154,34 @@ export async function processInboundMessage(msg: InboundTextMessage): Promise<{ 
 
   if (turn.escalate && turn.escalationReason) {
     await createActivity(msg.workspaceId, leadId, null, "qualification-updated", `Escalated to human: ${turn.escalationReason}`)
+  }
+
+  const whatsappCtx = { toNumber: msg.from, phoneNumberId: msg.phoneNumberId, accessToken: msg.accessToken }
+
+  await dispatchAutomationEvent("lead-score-above", {
+    workspaceId: msg.workspaceId,
+    leadId,
+    score: scoreResult.score,
+    whatsapp: whatsappCtx,
+    dedupeKey: msg.externalMessageId,
+  })
+
+  if (targetStage === "qualified" && currentStage !== "qualified") {
+    await dispatchAutomationEvent("whatsapp-lead-qualified", {
+      workspaceId: msg.workspaceId,
+      leadId,
+      whatsapp: whatsappCtx,
+      dedupeKey: msg.externalMessageId,
+    })
+  }
+
+  if (scoreResult.callPermission === "yes" && lead.callPermission !== "yes") {
+    await dispatchAutomationEvent("call-permission-received", {
+      workspaceId: msg.workspaceId,
+      leadId,
+      whatsapp: whatsappCtx,
+      dedupeKey: msg.externalMessageId,
+    })
   }
 
   const sendResult = await sendWhatsAppTextMessage(msg.phoneNumberId, msg.accessToken, msg.from, turn.reply)
