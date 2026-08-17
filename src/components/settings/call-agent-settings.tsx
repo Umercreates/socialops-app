@@ -32,6 +32,29 @@ export function CallAgentSettings() {
   const [questionDraft, setQuestionDraft] = React.useState("")
   const [saved, setSaved] = React.useState(false)
 
+  if (!demoMode) {
+    return (
+      <Card className="px-5 py-5">
+        <CardHeader className="px-0">
+          <CardTitle className="flex items-center gap-1.5 text-[15px]">
+            <Bot className="size-4" />
+            Call agent behavior
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 px-0">
+          <p className="text-sm text-muted-foreground">
+            Your AI call agent&apos;s name, voice, greeting, and qualification script are configured directly in your OmniDimension
+            dashboard, against the Agent ID you connected in Integrations - EasyLife dispatches real calls to that agent, it doesn&apos;t
+            script it. There&apos;s nothing to configure here.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Meetings booked from a call sync to Google Calendar - {calendarConnected ? "connected." : "not connected yet."}
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   function addQuestion() {
     if (!questionDraft.trim()) return
     update({ qualificationQuestions: [...config.qualificationQuestions, questionDraft.trim()] })

@@ -13,7 +13,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     if (!auth.ok) return auth.response
 
     const { id } = await ctx.params
-    await markNotificationRead(auth.ctx.workspaceId, id)
+    await markNotificationRead(auth.ctx.workspaceId, auth.ctx.userId, id)
     return NextResponse.json({ ok: true })
   } catch (error) {
     return apiError(error, "Failed to update notification")

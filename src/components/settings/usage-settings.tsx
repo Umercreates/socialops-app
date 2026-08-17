@@ -7,11 +7,33 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { formatCompactNumber } from "@/lib/format"
 import { USAGE_SUMMARY } from "@/lib/data/call-agent"
+import { useDemoMode } from "@/lib/demo-mode-context"
 
 export function UsageSettings() {
+  const demoMode = useDemoMode()
   const [threshold, setThreshold] = React.useState(USAGE_SUMMARY.budgetThreshold)
   const overThreshold = USAGE_SUMMARY.estimatedMonthlyCost > threshold
   const maxUsed = Math.max(...USAGE_SUMMARY.metrics.map((m) => m.used), 1)
+
+  if (!demoMode) {
+    return (
+      <Card className="px-5 py-5">
+        <CardHeader className="px-0">
+          <CardTitle className="flex items-center gap-1.5 text-[15px]">
+            <Gauge className="size-4" />
+            Usage this month
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-0">
+          <p className="text-sm text-muted-foreground">
+            Usage and cost tracking isn&apos;t available yet - each connected provider (WhatsApp, Gemini, OmniDimension, etc.) bills you
+            directly, and EasyLife doesn&apos;t currently meter usage against those accounts. Check each provider&apos;s own dashboard for
+            billing details.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-5">

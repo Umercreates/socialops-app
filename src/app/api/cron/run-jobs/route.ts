@@ -4,6 +4,7 @@ import { claimJobs, completeJob, failJob, type JobType } from "@/lib/jobs/queue"
 import { JOB_HANDLERS } from "@/lib/jobs/handlers"
 import { pruneExpiredOAuthStates, scheduleTokenRefreshes } from "@/lib/integrations/oauth"
 import { checkScheduledAutomations } from "@/lib/automations/engine"
+import { timingSafeTokenEqual } from "@/lib/auth/token-compare"
 import { apiError } from "@/lib/api/errors"
 
 /**
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Cron worker is not enabled" }, { status: 403 })
   }
   const provided = request.headers.get("x-cron-secret")
-  if (provided !== expected) {
+  if (!timingSafeTokenEqual(provided, expected)) {
     return NextResponse.json({ error: "Invalid cron secret" }, { status: 403 })
   }
 

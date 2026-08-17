@@ -7,8 +7,10 @@ import { Switch } from "@/components/ui/switch"
 import { ConnectionCard } from "@/components/whatsapp/connection-card"
 import { QrLinkCard } from "@/components/whatsapp/qr-link-card"
 import { useWhatsAppAiSettings } from "@/lib/store/whatsapp-store"
+import { useDemoMode } from "@/lib/demo-mode-context"
 
 export function WhatsAppSettings() {
+  const demoMode = useDemoMode()
   const { aiSettings, update } = useWhatsAppAiSettings()
 
   return (
@@ -16,6 +18,22 @@ export function WhatsAppSettings() {
       <ConnectionCard />
       <QrLinkCard />
 
+      {!demoMode ? (
+        <Card className="gap-3 px-5 py-5">
+          <CardHeader className="px-0">
+            <CardTitle className="flex items-center gap-1.5 text-[15px]">
+              <ShieldCheck className="size-4" />
+              AI reply & qualification
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-0">
+            <p className="text-sm text-muted-foreground">
+              The AI qualification chatbot always auto-replies and qualifies once WhatsApp is connected - there&apos;s no way yet to turn
+              it off, require approval before sending, or set business hours from here. If you need any of those, ask your developer.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
       <Card className="gap-4 px-5 py-5">
         <CardHeader className="px-0">
           <CardTitle className="flex items-center gap-1.5 text-[15px]">
@@ -72,6 +90,7 @@ export function WhatsAppSettings() {
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
   )
 }

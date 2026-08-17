@@ -56,11 +56,21 @@ export async function createNotification(input: CreateNotificationInput): Promis
   })
 }
 
-export async function markNotificationRead(workspaceId: string, id: string): Promise<void> {
+/** Scoped the same way listNotifications reads: a workspace-wide
+ * notification (userId null) or one addressed specifically to this caller
+ * - never lets one member mark another member's targeted notification
+ * read. */
+export async function markNotificationRead(workspaceId: string, userId: string, id: string): Promise<void> {
   await withDb(async (db) => {
     await db
       .update(notifications)
       .set({ readAt: new Date() })
-      .where(and(eq(notifications.id, id), eq(notifications.workspaceId, workspaceId)))
+      .where(
+        and(
+          eq(notifications.id, id),
+          eq(notifications.workspaceId, workspaceId),
+          or(isNull(notifications.userId), eq(notifications.userId, userId))
+        )
+      )
   })
 }

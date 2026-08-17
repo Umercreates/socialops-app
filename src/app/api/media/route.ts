@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@/lib/auth/guard"
+import { verifySameOrigin } from "@/lib/auth/csrf"
 import { validateUpload } from "@/lib/storage/media-validation"
 import { getStorageAdapter } from "@/lib/storage/local-adapter"
 import { createMediaAsset } from "@/lib/platform/media"
@@ -9,6 +10,9 @@ import { apiError } from "@/lib/api/errors"
  * later publishing job can actually read its bytes - browser object URLs
  * (the previous approach) only ever exist in that one browser tab. */
 export async function POST(request: Request) {
+  const originCheck = verifySameOrigin(request)
+  if (originCheck) return originCheck
+
   try {
     const auth = await requireAuth()
     if (!auth.ok) return auth.response

@@ -3,6 +3,7 @@ import { z } from "zod"
 import { hasAnyUsers, bootstrapFirstOwner } from "@/lib/auth/bootstrap"
 import { isPasswordStrongEnough, MIN_PASSWORD_LENGTH } from "@/lib/auth/password"
 import { verifySameOrigin } from "@/lib/auth/csrf"
+import { timingSafeTokenEqual } from "@/lib/auth/token-compare"
 import { apiError } from "@/lib/api/errors"
 
 /**
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Setup is not enabled" }, { status: 403 })
   }
   const providedToken = request.headers.get("x-setup-token")
-  if (providedToken !== expectedToken) {
+  if (!timingSafeTokenEqual(providedToken, expectedToken)) {
     return NextResponse.json({ error: "Invalid setup token" }, { status: 403 })
   }
 

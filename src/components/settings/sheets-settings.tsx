@@ -5,15 +5,30 @@ import { FileSpreadsheet, Loader2, CircleAlert, RefreshCw, Table2 } from "lucide
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/dashboard/status-badge"
+import { RealSettingsPointer } from "@/components/settings/real-settings-pointer"
 import { LEAD_SHEET_COLUMNS } from "@/lib/integrations/sheets"
 import { formatRelativeTime } from "@/lib/format"
 import { MOCK_NOW } from "@/lib/data/constants"
+import { useDemoMode } from "@/lib/demo-mode-context"
 import { useGoogleSheets } from "@/lib/store/sheets-store"
 
 export function SheetsSettings() {
+  const demoMode = useDemoMode()
   const { status, records, testConnection } = useGoogleSheets()
   const [testing, setTesting] = React.useState(false)
   const [testResult, setTestResult] = React.useState<{ ok: boolean; message: string } | null>(null)
+
+  if (!demoMode) {
+    return (
+      <RealSettingsPointer
+        icon={FileSpreadsheet}
+        title="Google Sheets sync"
+        description="Connect Google Sheets, pick a spreadsheet, and map lead columns from the dedicated Integrations page."
+        href="/dashboard/integrations"
+        cta="Go to Integrations"
+      />
+    )
+  }
 
   async function handleTest() {
     setTesting(true)

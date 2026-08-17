@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { runMigrations } from "@/lib/db/migrate"
+import { timingSafeTokenEqual } from "@/lib/auth/token-compare"
 import { apiError } from "@/lib/api/errors"
 
 /**
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
   const providedToken = request.headers.get("x-migration-token")
-  if (providedToken !== expectedToken) {
+  if (!timingSafeTokenEqual(providedToken, expectedToken)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 

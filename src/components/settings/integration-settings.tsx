@@ -1,8 +1,11 @@
 "use client"
 
+import { Plug } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/dashboard/status-badge"
+import { RealSettingsPointer } from "@/components/settings/real-settings-pointer"
+import { useDemoMode } from "@/lib/demo-mode-context"
 import { useIntegrations } from "@/lib/store/settings-store"
 import type { IntegrationStatus } from "@/types"
 
@@ -19,7 +22,20 @@ const STATUS_LABEL: Record<IntegrationStatus, string> = {
 }
 
 export function IntegrationSettings() {
+  const demoMode = useDemoMode()
   const { integrations, setStatus } = useIntegrations()
+
+  if (!demoMode) {
+    return (
+      <RealSettingsPointer
+        icon={Plug}
+        title="APIs & Integrations"
+        description="Connect and manage every real provider (Facebook, Instagram, WhatsApp, Gemini, and more) from the dedicated Integrations page."
+        href="/dashboard/integrations"
+        cta="Go to Integrations"
+      />
+    )
+  }
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { eq, and } from "drizzle-orm"
+import { eq, isNotNull } from "drizzle-orm"
 import { withDb } from "@/lib/db/client"
 import { webhookEvents } from "@/lib/db/schema"
 
@@ -23,20 +23,15 @@ export interface RecordWebhookEventInput {
 }
 
 /** Returns the new row, or `null` if this (provider, externalEventId) pair
- * was already recorded - the caller's cue to skip reprocessing. Safe to
- * call even when externalEventId is absent (each such call is treated as
- * unique, since there's nothing to dedupe against). */
+ * was already recorded - the caller's cue to skip reprocessing. Relies on
+ * the partial unique index on (provider, external_event_id) (see migration
+ * 0010) for atomicity under concurrent redelivery - `onConflictDoNothing`
+ * makes this safe even if two deliveries for the same event race each
+ * other, unlike a plain select-then-insert. Safe to call even when
+ * externalEventId is absent (each such call is treated as unique, since
+ * there's nothing to dedupe against - the partial index excludes NULLs). */
 export async function recordWebhookEvent(input: RecordWebhookEventInput): Promise<{ id: string } | null> {
   return withDb(async (db) => {
-    if (input.externalEventId) {
-      const existing = await db
-        .select({ id: webhookEvents.id })
-        .from(webhookEvents)
-        .where(and(eq(webhookEvents.provider, input.provider), eq(webhookEvents.externalEventId, input.externalEventId)))
-        .limit(1)
-      if (existing[0]) return null
-    }
-
     const [created] = await db
       .insert(webhookEvents)
       .values({
@@ -47,8 +42,12 @@ export async function recordWebhookEvent(input: RecordWebhookEventInput): Promis
         eventType: input.eventType ?? null,
         payloadSummary: input.payloadSummary ?? null,
       })
+      .onConflictDoNothing({
+        target: [webhookEvents.provider, webhookEvents.externalEventId],
+        where: isNotNull(webhookEvents.externalEventId),
+      })
       .returning({ id: webhookEvents.id })
-    return created
+    return created ?? null
   })
 }
 
