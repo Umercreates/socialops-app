@@ -8,6 +8,7 @@ import { sendWhatsAppTextMessage } from "@/lib/integrations/whatsapp/cloud-api"
 import { insertOutboundMessage, updateConversation } from "@/lib/integrations/whatsapp/repository"
 import { syncLeadToSheet } from "@/lib/integrations/google-sheets/sync"
 import { bookMeeting } from "@/lib/integrations/google-calendar/booking"
+import { parseCreateMeetingConfig, renderMeetingTitle } from "./create-meeting-config"
 import type { AutomationActionType } from "@/types"
 
 /**
@@ -168,23 +169,25 @@ async function syncSheetRow(ctx: ActionContext): Promise<ActionResult> {
   return { status: "completed" }
 }
 
-/** No scheduling-configuration UI exists yet for this action, so it books
- * a sensible default: 24 hours out, 30 minutes, titled after the lead,
- * with the lead's own email invited if one is on file. Blocked (not
- * failed) when Google Calendar isn't connected/selected - an honest setup
- * gap, not an error. */
-async function createMeetingAction(ctx: ActionContext): Promise<ActionResult> {
+/** Timing/duration/title are configurable per-automation via the builder
+ * UI (actionValue holds them JSON-encoded - see create-meeting-config.ts);
+ * a workspace that hasn't configured it gets the same 24h/30min sensible
+ * default as before. Blocked (not failed) when Google Calendar isn't
+ * connected/selected - an honest setup gap, not an error. */
+async function createMeetingAction(actionValue: string | undefined, ctx: ActionContext): Promise<ActionResult> {
   if (!ctx.leadId) return blocked("No lead associated with this event.")
   const lead = await getLead(ctx.workspaceId, ctx.leadId)
   if (!lead) return blocked("Lead not found.")
 
-  const start = new Date(Date.now() + 24 * 60 * 60 * 1000)
-  const end = new Date(start.getTime() + 30 * 60 * 1000)
+  const config = parseCreateMeetingConfig(actionValue)
+  const start = new Date(Date.now() + config.delayHours * 60 * 60 * 1000)
+  const end = new Date(start.getTime() + config.durationMinutes * 60 * 1000)
+  const title = renderMeetingTitle(config.titleTemplate, lead.name)
 
   const result = await bookMeeting({
     workspaceId: ctx.workspaceId,
     leadId: lead.id,
-    title: `Meeting with ${lead.name}`,
+    title,
     startTime: start.toISOString(),
     endTime: end.toISOString(),
     attendeeEmails: lead.email ? [lead.email] : [],
@@ -235,7 +238,7 @@ export async function executeAction(actionType: AutomationActionType, actionValu
     case "add-tag":
       return notYetImplemented("Tagging")()
     case "create-meeting":
-      return createMeetingAction(ctx)
+      return createMeetingAction(actionValue, ctx)
     case "add-sheet-row":
     case "update-sheet-row":
       return syncSheetRow(ctx)

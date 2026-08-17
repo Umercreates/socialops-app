@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PlatformIcon, PLATFORM_LABEL } from "@/components/dashboard/platform-icon"
 import { TRIGGER_OPTIONS, CONDITION_OPTIONS, ACTION_OPTIONS, labelFor } from "@/lib/automation-options"
+import { DEFAULT_CREATE_MEETING_CONFIG, serializeCreateMeetingConfig, type CreateMeetingConfig } from "@/lib/automations/create-meeting-config"
 import type {
   Automation,
   AutomationActionType,
@@ -46,6 +47,7 @@ export function AutomationBuilderDialog({ onCreated }: AutomationBuilderDialogPr
   const [conditionValue, setConditionValue] = React.useState("")
   const [actionType, setActionType] = React.useState<AutomationActionType>("reply")
   const [actionValue, setActionValue] = React.useState("")
+  const [meetingConfig, setMeetingConfig] = React.useState<CreateMeetingConfig>(DEFAULT_CREATE_MEETING_CONFIG)
   const [runMode, setRunMode] = React.useState<AutomationRunMode>("manual-approval")
   const [workingHoursOnly, setWorkingHoursOnly] = React.useState(true)
   const [delayMinutes, setDelayMinutes] = React.useState(0)
@@ -61,6 +63,7 @@ export function AutomationBuilderDialog({ onCreated }: AutomationBuilderDialogPr
     setConditionValue("")
     setActionType("reply")
     setActionValue("")
+    setMeetingConfig(DEFAULT_CREATE_MEETING_CONFIG)
     setRunMode("manual-approval")
     setWorkingHoursOnly(true)
     setDelayMinutes(0)
@@ -71,6 +74,14 @@ export function AutomationBuilderDialog({ onCreated }: AutomationBuilderDialogPr
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault()
     if (!name.trim()) return
+
+    const isCreateMeeting = actionType === "create-meeting"
+    const resolvedActionValue = isCreateMeeting ? serializeCreateMeetingConfig(meetingConfig) : actionValue || undefined
+    const actionLabelSuffix = isCreateMeeting
+      ? `: ${meetingConfig.delayHours}h delay, ${meetingConfig.durationMinutes}min`
+      : actionValue
+        ? `: "${actionValue}"`
+        : ""
 
     setSaving(true)
     setError(null)
@@ -94,8 +105,8 @@ export function AutomationBuilderDialog({ onCreated }: AutomationBuilderDialogPr
           },
           action: {
             type: actionType,
-            label: labelFor(ACTION_OPTIONS, actionType) + (actionValue ? `: "${actionValue}"` : ""),
-            value: actionValue || undefined,
+            label: labelFor(ACTION_OPTIONS, actionType) + actionLabelSuffix,
+            value: resolvedActionValue,
           },
           rules: { runMode, workingHoursOnly, delayMinutes, maxAttempts, escalateAfterFailures },
         }),
@@ -229,13 +240,46 @@ export function AutomationBuilderDialog({ onCreated }: AutomationBuilderDialogPr
                 </SelectContent>
               </Select>
             </StepRow>
-            {actionNeedsValue && (
-              <Input
-                value={actionValue}
-                onChange={(event) => setActionValue(event.target.value)}
-                placeholder="Value…"
-                className="h-8"
-              />
+            {actionType === "create-meeting" ? (
+              <div className="grid grid-cols-2 gap-2 rounded-md bg-muted/40 p-2">
+                <div className="flex flex-col gap-1">
+                  <Label className="text-xs text-muted-foreground">Delay (hours)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={meetingConfig.delayHours}
+                    onChange={(e) => setMeetingConfig((c) => ({ ...c, delayHours: Math.max(0, Number(e.target.value) || 0) }))}
+                    className="h-8"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label className="text-xs text-muted-foreground">Duration (minutes)</Label>
+                  <Input
+                    type="number"
+                    min={5}
+                    value={meetingConfig.durationMinutes}
+                    onChange={(e) => setMeetingConfig((c) => ({ ...c, durationMinutes: Math.max(5, Number(e.target.value) || 5) }))}
+                    className="h-8"
+                  />
+                </div>
+                <div className="col-span-2 flex flex-col gap-1">
+                  <Label className="text-xs text-muted-foreground">Meeting title ({"{name}"} = lead&apos;s name)</Label>
+                  <Input
+                    value={meetingConfig.titleTemplate}
+                    onChange={(e) => setMeetingConfig((c) => ({ ...c, titleTemplate: e.target.value }))}
+                    className="h-8"
+                  />
+                </div>
+              </div>
+            ) : (
+              actionNeedsValue && (
+                <Input
+                  value={actionValue}
+                  onChange={(event) => setActionValue(event.target.value)}
+                  placeholder="Value…"
+                  className="h-8"
+                />
+              )
             )}
           </div>
 

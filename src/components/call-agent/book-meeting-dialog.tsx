@@ -29,17 +29,14 @@ function RealBookingForm({ lead, onClose }: { lead: Lead; onClose: () => void })
   const { setMeetingStatus, setStage, addNote } = useLeads()
   const [startLocal, setStartLocal] = React.useState("")
   const [durationMinutes, setDurationMinutes] = React.useState("30")
-  const [step, setStep] = React.useState<"form" | "booking" | "done">("form")
+  const [step, setStep] = React.useState<"form" | "checking" | "conflict" | "booking" | "done">("form")
   const [error, setError] = React.useState<string | null>(null)
   const [meetLink, setMeetLink] = React.useState<string | null>(null)
+  const [busyPeriods, setBusyPeriods] = React.useState<{ start: string; end: string }[]>([])
 
-  async function handleBook() {
-    if (!startLocal) return
+  async function doBook(start: Date, end: Date) {
     setStep("booking")
-    setError(null)
     try {
-      const start = new Date(startLocal)
-      const end = new Date(start.getTime() + Number(durationMinutes) * 60000)
       const res = await fetch("/api/meetings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -67,6 +64,72 @@ function RealBookingForm({ lead, onClose }: { lead: Lead; onClose: () => void })
       setError("Couldn't reach the server.")
       setStep("form")
     }
+  }
+
+  async function handleBook() {
+    if (!startLocal) return
+    setError(null)
+    const start = new Date(startLocal)
+    const end = new Date(start.getTime() + Number(durationMinutes) * 60000)
+
+    // A practical conflict check, not a full scheduling product: if the
+    // check itself fails (network, provider hiccup), proceed to book
+    // rather than blocking on an availability check that didn't work -
+    // the booking attempt itself is still the real source of truth.
+    setStep("checking")
+    try {
+      const res = await fetch(`/api/integrations/google-calendar/free-busy?start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}`, {
+        credentials: "same-origin",
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.busy?.length > 0) {
+        setBusyPeriods(data.busy)
+        setStep("conflict")
+        return
+      }
+    } catch {
+      // fall through to booking
+    }
+    await doBook(start, end)
+  }
+
+  function handleBookAnyway() {
+    const start = new Date(startLocal)
+    const end = new Date(start.getTime() + Number(durationMinutes) * 60000)
+    doBook(start, end)
+  }
+
+  if (step === "checking") {
+    return (
+      <div className="flex flex-col items-center gap-3 py-8 text-center">
+        <Loader2 className="size-6 animate-spin text-brand" />
+        <p className="text-sm font-medium text-foreground">Checking calendar availability…</p>
+      </div>
+    )
+  }
+
+  if (step === "conflict") {
+    return (
+      <>
+        <div className="flex flex-col items-center gap-3 py-4 text-center">
+          <TriangleAlert className="size-6 text-warning" />
+          <p className="text-sm font-medium text-foreground">This time conflicts with something already on the calendar</p>
+          <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {busyPeriods.map((b, i) => (
+              <span key={i}>
+                Busy: {new Date(b.start).toLocaleString()} – {new Date(b.end).toLocaleTimeString()}
+              </span>
+            ))}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setStep("form")}>
+            Choose another time
+          </Button>
+          <Button onClick={handleBookAnyway}>Book anyway</Button>
+        </DialogFooter>
+      </>
+    )
   }
 
   if (step === "booking") {
