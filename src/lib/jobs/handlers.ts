@@ -13,6 +13,7 @@ import {
   getContainerStatus,
   publishInstagramVideoContainer,
 } from "@/lib/integrations/instagram/client"
+import { createPost as createLinkedInPost, uploadImage as uploadLinkedInImage, uploadVideo as uploadLinkedInVideo } from "@/lib/integrations/linkedin/client"
 import { getCall, markCallDispatched, markCallFailed } from "@/lib/platform/calls"
 import { getPost, getPostTarget, markPostTargetResult, recomputePostStatus, type PostTargetRow } from "@/lib/platform/posts"
 import { getMediaAsset } from "@/lib/platform/media"
@@ -155,6 +156,66 @@ async function publishToFacebook(
   if (!message.trim()) return { status: "failed", errorMessage: "This post has no caption to publish." }
   const result = await publishTextPost(pageId, pageAccessToken, message)
   if (!result.ok) return { status: "failed", errorMessage: result.errorMessage ?? "Facebook publish failed" }
+  return { status: "published", externalPostId: result.externalPostId }
+}
+
+/** Text, a single image, or a single video, posted as whichever identity
+ * (member profile or administered company Page) the workspace selected.
+ * Every write call here will genuinely fail with a 403 until LinkedIn has
+ * approved this app for Community Management API access - that's a real
+ * provider-side gate, not a bug (see linkedin/client.ts's top comment). */
+async function publishToLinkedIn(
+  target: PostTargetRow,
+  row: Awaited<ReturnType<typeof resolveActiveConnection>>["row"]
+): Promise<{ status: "published" | "failed" | "blocked"; externalPostId?: string; errorMessage?: string }> {
+  const authorUrn = row?.config?.authorUrn
+  const { value: accessToken } = resolveCredentialValue(row, "accessToken", "linkedin")
+  if (typeof authorUrn !== "string" || !accessToken) {
+    return { status: "blocked", errorMessage: "No LinkedIn identity selected for this workspace - choose one in Integrations." }
+  }
+
+  const post = await getPost(target.workspaceId, target.postId)
+  if (!post) return { status: "failed", errorMessage: "Parent post no longer exists." }
+
+  const variant = post.variants.find((v) => v.platform === "linkedin" && v.enabled)
+  const message = variant
+    ? [variant.caption, variant.hashtags].filter(Boolean).join("\n\n")
+    : [post.baseCaption, post.baseHashtags].filter(Boolean).join("\n\n")
+
+  if (post.media.length > 1) {
+    return { status: "blocked", errorMessage: "LinkedIn publishing supports at most one attached image or video per post right now." }
+  }
+
+  if (post.media.length === 1) {
+    const media = post.media[0]
+    if (!media.mediaAssetId) {
+      return { status: "blocked", errorMessage: "This post's attached media hasn't finished uploading - try publishing again in a moment." }
+    }
+    const asset = await getMediaAsset(target.workspaceId, media.mediaAssetId)
+    if (!asset) return { status: "failed", errorMessage: "The attached media file no longer exists." }
+    const buffer = await getStorageAdapter().read(asset.storageKey)
+    if (!buffer) return { status: "failed", errorMessage: "The attached media file's content couldn't be read." }
+
+    let mediaUrn: string | undefined
+    if (asset.mediaType === "video") {
+      const upload = await uploadLinkedInVideo(accessToken, authorUrn, buffer)
+      if (!upload.ok) return { status: "failed", errorMessage: upload.errorMessage ?? "LinkedIn media upload failed" }
+      mediaUrn = upload.videoUrn
+    } else {
+      const upload = await uploadLinkedInImage(accessToken, authorUrn, buffer)
+      if (!upload.ok) return { status: "failed", errorMessage: upload.errorMessage ?? "LinkedIn media upload failed" }
+      mediaUrn = upload.imageUrn
+    }
+    if (!mediaUrn) return { status: "failed", errorMessage: "LinkedIn didn't return a usable media URN." }
+
+    const result = await createLinkedInPost(accessToken, authorUrn, message, { urn: mediaUrn, type: asset.mediaType })
+    if (!result.ok) return { status: "failed", errorMessage: result.errorMessage ?? "LinkedIn publish failed" }
+    return { status: "published", externalPostId: result.externalPostId }
+  }
+
+  if (!message.trim()) return { status: "failed", errorMessage: "This post has no caption to publish." }
+  const result = await createLinkedInPost(accessToken, authorUrn, message)
+  if (!result.ok) return { status: "failed", errorMessage: result.errorMessage ?? "LinkedIn publish failed" }
   return { status: "published", externalPostId: result.externalPostId }
 }
 
@@ -320,7 +381,9 @@ async function publishPostHandler(job: ClaimedJob): Promise<void> {
   const result =
     target.provider === "facebook"
       ? await publishToFacebook(target, row)
-      : { status: "failed" as const, errorMessage: `Publishing to ${target.provider} is architecture-ready but has no publish adapter implemented yet.` }
+      : target.provider === "linkedin"
+        ? await publishToLinkedIn(target, row)
+        : { status: "failed" as const, errorMessage: `Publishing to ${target.provider} is architecture-ready but has no publish adapter implemented yet.` }
 
   await markPostTargetResult(targetId, result)
   await recomputePostStatus(target.workspaceId, target.postId)

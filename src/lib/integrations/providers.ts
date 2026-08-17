@@ -236,7 +236,8 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     id: "linkedin",
     name: "LinkedIn",
     category: "social",
-    description: "LinkedIn publishing - not yet implemented beyond the connection itself.",
+    description:
+      "LinkedIn text/image/video publishing (member profile or a company Page you administer) is real, but requires LinkedIn to approve this app for Community Management API access first - w_member_social and w_organization_social are both gated behind that review, not self-serve.",
     capabilities: ["oauth", "publishing"],
     credentialFields: OAUTH_APP_FIELDS,
     supportedModes: ["demo", "live"],
@@ -244,7 +245,14 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     oauth: {
       authorizationUrl: "https://www.linkedin.com/oauth/v2/authorization",
       tokenUrl: "https://www.linkedin.com/oauth/v2/accessToken",
-      scopes: ["w_member_social", "r_organization_social"],
+      // openid+profile resolve the member's own person URN (identity
+      // discovery); w_member_social/w_organization_social are the actual
+      // publish permissions; rw_organization_admin is needed for
+      // organizationAcls (discovering which company Pages this member
+      // administers). All of the w_*/rw_* scopes here are only ever
+      // granted once LinkedIn has approved this app for Community
+      // Management API access - see providers.ts's description field.
+      scopes: ["openid", "profile", "w_member_social", "w_organization_social", "rw_organization_admin"],
       perWorkspaceAppCredentials: true,
       platformAppEnvVars: { clientId: "LINKEDIN_PLATFORM_CLIENT_ID", clientSecret: "LINKEDIN_PLATFORM_CLIENT_SECRET" },
     },
