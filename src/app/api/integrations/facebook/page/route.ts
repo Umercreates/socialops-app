@@ -6,7 +6,7 @@ import { resolveActiveConnection } from "@/lib/integrations/credential-resolutio
 import { resolveCredentialValue } from "@/lib/integrations/service"
 import { upsertConnection, getConnection } from "@/lib/integrations/repository"
 import { encryptSecret } from "@/lib/integrations/crypto"
-import { listFacebookPages } from "@/lib/integrations/facebook/client"
+import { listFacebookPages, subscribePageToWebhooks } from "@/lib/integrations/facebook/client"
 import { getLinkedInstagramAccount } from "@/lib/integrations/instagram/client"
 import { upsertSocialAccount } from "@/lib/platform/social-accounts"
 import { apiError } from "@/lib/api/errors"
@@ -90,6 +90,15 @@ export async function PUT(request: Request) {
         avatarUrl: instagramAccount.profilePictureUrl,
         capabilities: ["publishing", "comments"],
       })
+    }
+
+    // Subscribes this Page (and its linked Instagram account) to real-time
+    // comment webhooks - zero manual webhook setup for the client. Never
+    // blocks the Page selection itself on failure; comment ingestion just
+    // won't start until a retry (e.g. re-saving the Page) succeeds.
+    const subscribeResult = await subscribePageToWebhooks(page.id, page.accessToken)
+    if (!subscribeResult.ok) {
+      console.error("Facebook webhook subscription failed:", subscribeResult.errorMessage)
     }
 
     return NextResponse.json({ selection: { pageId: page.id, pageName: page.name }, instagramLinked: Boolean(instagramAccount.ok) })
