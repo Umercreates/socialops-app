@@ -421,3 +421,15 @@ export const calls = socialops.table("calls", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 })
+
+export const googleSheetsSelections = socialops.table("google_sheets_selections", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull().unique(),
+  spreadsheetId: text("spreadsheet_id").notNull(),
+  spreadsheetName: text("spreadsheet_name"),
+  worksheetName: text("worksheet_name").notNull(),
+  columnMapping: jsonb("column_mapping").notNull().default({}),
+  selectedByUserId: uuid("selected_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})

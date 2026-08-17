@@ -91,8 +91,15 @@ export interface OAuthConfig {
    * platform-level provider app has been created); `resolveCredentialValue`
    * checks these before falling through to a workspace's own saved
    * clientId/clientSecret, so setting them later requires no code change or
-   * redeploy - purely an env/config addition. */
-  platformAppEnvVars?: { clientId: string; clientSecret: string }
+   * redeploy - purely an env/config addition.
+   *
+   * A single field may list more than one env var name, checked in order -
+   * this is how an older/shorter alias (e.g. GOOGLE_CLIENT_ID, already set
+   * in a real production environment before the *_PLATFORM_* naming existed)
+   * keeps working without forcing a secret-value migration. The first
+   * variable name in the list is the canonical one to document going
+   * forward; later entries exist only for backward compatibility. */
+  platformAppEnvVars?: { clientId: string | string[]; clientSecret: string | string[] }
 }
 
 export interface ProviderDefinition {
@@ -274,7 +281,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     oauth: {
       ...GOOGLE_OAUTH_BASE,
       scopes: ["https://www.googleapis.com/auth/youtube.upload"],
-      platformAppEnvVars: { clientId: "GOOGLE_PLATFORM_CLIENT_ID", clientSecret: "GOOGLE_PLATFORM_CLIENT_SECRET" },
+      platformAppEnvVars: { clientId: ["GOOGLE_PLATFORM_CLIENT_ID", "GOOGLE_CLIENT_ID"], clientSecret: ["GOOGLE_PLATFORM_CLIENT_SECRET", "GOOGLE_CLIENT_SECRET"] },
     },
     requiresWebhook: false,
   },
@@ -329,8 +336,12 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     requiresOAuth: true,
     oauth: {
       ...GOOGLE_OAUTH_BASE,
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-      platformAppEnvVars: { clientId: "GOOGLE_PLATFORM_CLIENT_ID", clientSecret: "GOOGLE_PLATFORM_CLIENT_SECRET" },
+      // drive.metadata.readonly lists which spreadsheets exist in the
+      // connected account (for the client to pick from) without granting
+      // read access to file contents; spreadsheets is the actual read/
+      // write scope, needed once a specific sheet is selected.
+      scopes: ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.metadata.readonly"],
+      platformAppEnvVars: { clientId: ["GOOGLE_PLATFORM_CLIENT_ID", "GOOGLE_CLIENT_ID"], clientSecret: ["GOOGLE_PLATFORM_CLIENT_SECRET", "GOOGLE_CLIENT_SECRET"] },
     },
     requiresWebhook: false,
   },
@@ -346,7 +357,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDefinition> = {
     oauth: {
       ...GOOGLE_OAUTH_BASE,
       scopes: ["https://www.googleapis.com/auth/calendar.events"],
-      platformAppEnvVars: { clientId: "GOOGLE_PLATFORM_CLIENT_ID", clientSecret: "GOOGLE_PLATFORM_CLIENT_SECRET" },
+      platformAppEnvVars: { clientId: ["GOOGLE_PLATFORM_CLIENT_ID", "GOOGLE_CLIENT_ID"], clientSecret: ["GOOGLE_PLATFORM_CLIENT_SECRET", "GOOGLE_CLIENT_SECRET"] },
     },
     requiresWebhook: false,
   },

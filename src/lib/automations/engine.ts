@@ -34,7 +34,7 @@ export interface AutomationEventContext {
   score?: number
   tags?: string[]
   actorUserId?: string | null
-  whatsapp?: { toNumber: string; phoneNumberId: string; accessToken: string }
+  whatsapp?: { toNumber: string; phoneNumberId: string; accessToken: string; conversationId?: string }
   /** Identifies the underlying event (an inbound message id, a call id) -
    * not a random per-dispatch id. Without one, a retried caller (a job
    * queue retry, a duplicate webhook delivery) could fire the same

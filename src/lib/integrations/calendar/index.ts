@@ -1,21 +1,14 @@
-import { DEMO_MODE } from "@/lib/demo-mode"
-
 /**
  * Google Calendar integration seam. A real implementation needs a Google
  * Cloud project, OAuth consent, and the Calendar API enabled — free to set
  * up, but nothing here claims that's done. Slot generation and booking are
- * both local simulations.
+ * both local simulations, used only by the demo-mode branch of
+ * book-meeting-dialog.tsx/call-agent-settings.tsx.
+ *
+ * The REAL per-workspace status comes from useProviderStatus("google-calendar")
+ * - never from a DEMO_MODE flag, which has no way to know whether any real
+ * workspace has actually connected anything.
  */
-
-export interface CalendarIntegrationStatus {
-  configured: boolean
-  mode: "demo" | "live"
-  provider: "google-calendar"
-}
-
-export function getCalendarIntegrationStatus(): CalendarIntegrationStatus {
-  return { configured: !DEMO_MODE, mode: DEMO_MODE ? "demo" : "live", provider: "google-calendar" }
-}
 
 export interface TimeSlot {
   date: string

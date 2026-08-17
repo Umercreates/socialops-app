@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, CircleCheck, RefreshCw, Unplug, Pencil, Bot } from "lucide-react"
+import Link from "next/link"
+import { Loader2, CircleCheck, RefreshCw, Unplug, Pencil, Bot, PlugZap } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,22 +22,69 @@ import { HEALTH_TONE, HEALTH_LABEL } from "@/lib/health"
 import { formatRelativeTime } from "@/lib/format"
 import { MOCK_NOW } from "@/lib/data/constants"
 import { useWhatsAppAccount, useWhatsAppAiSettings } from "@/lib/store/whatsapp-store"
-import { getWhatsAppIntegrationStatus } from "@/lib/integrations/whatsapp"
+import { useDemoMode } from "@/lib/demo-mode-context"
+import { useProviderStatus } from "@/lib/hooks/use-provider-status"
 
 function formatDate(iso: string) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(iso))
 }
 
+/** Real, honest status card for a genuinely-connected workspace - the
+ * legacy mock account's fields (business name, number, chatbot toggle)
+ * don't correspond to anything the real WhatsApp backend actually models
+ * (that lives in Integrations: WABA ID, Phone Number ID, webhook), so
+ * this deliberately doesn't try to fake that shape. Every real
+ * configure/reconnect/disconnect action already lives in Integrations. */
+function RealStatusCard() {
+  const { view, loading, isLive } = useProviderStatus("whatsapp")
+
+  if (loading) {
+    return (
+      <Card className="items-center justify-center gap-2 px-5 py-8 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
+        Loading...
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="gap-4 px-5 py-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex size-11 items-center justify-center rounded-xl bg-muted ring-1 ring-border">
+            <WhatsAppIcon size={22} />
+          </span>
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-foreground">WhatsApp Business Cloud API</span>
+            <span className="text-xs text-muted-foreground">{isLive ? "Connected and active" : "Not connected yet"}</span>
+          </div>
+        </div>
+        <StatusBadge tone={isLive ? "success" : "neutral"}>{isLive ? "Live" : view?.status.replace("_", " ") ?? "Not configured"}</StatusBadge>
+      </div>
+      <div className="border-t border-border pt-3.5">
+        <Button size="sm" render={<Link href="/dashboard/integrations" />} nativeButton={false}>
+          <PlugZap />
+          {isLive ? "Manage in Integrations" : "Connect WhatsApp"}
+        </Button>
+      </div>
+    </Card>
+  )
+}
+
 export function ConnectionCard() {
+  const demoMode = useDemoMode()
+  // All hooks below must run unconditionally on every render (Rules of
+  // Hooks) - the demoMode branch is a return of JSX, never a skipped hook.
   const { account, connect, disconnect, reconnect, setNumber } = useWhatsAppAccount()
   const { aiSettings } = useWhatsAppAiSettings()
-  const integrationStatus = getWhatsAppIntegrationStatus()
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [businessName, setBusinessName] = React.useState(account.businessName)
   const [numberDraft, setNumberDraft] = React.useState(account.number)
   const [step, setStep] = React.useState<"form" | "connecting" | "done">("form")
   const [editingNumber, setEditingNumber] = React.useState(false)
   const [numberFieldValue, setNumberFieldValue] = React.useState(account.number)
+
+  if (!demoMode) return <RealStatusCard />
 
   async function handleConnect(event: React.FormEvent) {
     event.preventDefault()
@@ -61,7 +109,7 @@ export function ConnectionCard() {
           </span>
           <div className="flex flex-col">
             <span className="text-sm font-medium text-foreground">{account.businessName}</span>
-            <span className="text-xs text-muted-foreground">WhatsApp Business Cloud API · {integrationStatus.mode === "demo" ? "Demo mode" : "Live"}</span>
+            <span className="text-xs text-muted-foreground">WhatsApp Business Cloud API · Demo mode</span>
           </div>
         </div>
         <div className="flex flex-col items-end gap-1.5">

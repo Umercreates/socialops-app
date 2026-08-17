@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { getCalendarIntegrationStatus } from "@/lib/integrations/calendar"
 import { TEAM_MEMBERS } from "@/lib/data/settings"
 import { useCallAgentConfig } from "@/lib/store/call-agent-store"
+import { useDemoMode } from "@/lib/demo-mode-context"
+import { useProviderStatus } from "@/lib/hooks/use-provider-status"
 import type { CallMode } from "@/types"
 
 const VOICES = ["Warm & professional (female)", "Confident & friendly (male)", "Neutral (text-only, no voice yet)"]
@@ -25,7 +26,9 @@ const CALL_MODE_LABEL: Record<CallMode, string> = {
 
 export function CallAgentSettings() {
   const { config, update } = useCallAgentConfig()
-  const calendarStatus = getCalendarIntegrationStatus()
+  const demoMode = useDemoMode()
+  const { isLive } = useProviderStatus("google-calendar")
+  const calendarConnected = demoMode ? false : isLive
   const [questionDraft, setQuestionDraft] = React.useState("")
   const [saved, setSaved] = React.useState(false)
 
@@ -225,7 +228,7 @@ export function CallAgentSettings() {
             </Select>
           </div>
           <p className="text-xs text-muted-foreground">
-            Meetings booked here sync to Google Calendar — {calendarStatus.mode === "demo" ? "not connected in this demo" : "connected"}.
+            Meetings booked here sync to Google Calendar — {calendarConnected ? "connected" : demoMode ? "not connected in this demo" : "not connected"}.
           </p>
         </CardContent>
       </Card>

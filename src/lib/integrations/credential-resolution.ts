@@ -42,9 +42,11 @@ export function resolveCredentialValue(
   // precedence over this fallback.
   const platformAppEnvVars = PROVIDER_REGISTRY[provider].oauth?.platformAppEnvVars
   if (platformAppEnvVars && (fieldKey === "clientId" || fieldKey === "clientSecret")) {
-    const envVar = fieldKey === "clientId" ? platformAppEnvVars.clientId : platformAppEnvVars.clientSecret
-    const envValue = process.env[envVar]
-    if (envValue) return { value: envValue, source: "environment" }
+    const envVarNames = fieldKey === "clientId" ? platformAppEnvVars.clientId : platformAppEnvVars.clientSecret
+    for (const envVar of Array.isArray(envVarNames) ? envVarNames : [envVarNames]) {
+      const envValue = process.env[envVar]
+      if (envValue) return { value: envValue, source: "environment" }
+    }
   }
 
   return { value: null, source: "none" }

@@ -5,6 +5,7 @@ import { resolveActiveConnection } from "@/lib/integrations/credential-resolutio
 import { resolveCredentialValue } from "@/lib/integrations/service"
 import { enqueueJob } from "@/lib/jobs/queue"
 import { sendWhatsAppTextMessage } from "@/lib/integrations/whatsapp/cloud-api"
+import { insertOutboundMessage, updateConversation } from "@/lib/integrations/whatsapp/repository"
 import type { AutomationActionType } from "@/types"
 
 /**
@@ -21,8 +22,12 @@ export interface ActionContext {
   actorUserId: string | null
   leadId?: string
   /** Present only when the triggering event was a WhatsApp message -
-   * required for any action that replies in that same conversation. */
-  whatsapp?: { toNumber: string; phoneNumberId: string; accessToken: string }
+   * required for any action that replies in that same conversation.
+   * conversationId lets a successful reply be persisted into that same
+   * conversation's message history, exactly like the qualification bot's
+   * replies are - without it, an automation's reply would send but never
+   * show up in the Inbox thread. */
+  whatsapp?: { toNumber: string; phoneNumberId: string; accessToken: string; conversationId?: string }
 }
 
 export interface ActionResult {
@@ -40,6 +45,23 @@ async function sendWhatsAppReply(actionValue: string | undefined, ctx: ActionCon
   if (!text) return blocked("This action has no reply text configured.")
 
   const result = await sendWhatsAppTextMessage(ctx.whatsapp.phoneNumberId, ctx.whatsapp.accessToken, ctx.whatsapp.toNumber, text)
+
+  // Persisted with the truthful provider outcome either way - never a fake
+  // "sent" record if the provider call actually failed. Only possible when
+  // the triggering event carried a conversationId (every WhatsApp-sourced
+  // trigger does); without one there's no conversation to attach it to.
+  if (ctx.whatsapp.conversationId) {
+    await insertOutboundMessage(
+      ctx.workspaceId,
+      ctx.whatsapp.conversationId,
+      text,
+      "automation",
+      result.externalMessageId ?? null,
+      result.ok ? "sent" : "failed"
+    )
+    await updateConversation(ctx.workspaceId, ctx.whatsapp.conversationId, { lastMessageAt: new Date() })
+  }
+
   if (!result.ok) return { status: "failed", errorMessage: result.errorMessage ?? "WhatsApp send failed" }
   return { status: "completed" }
 }

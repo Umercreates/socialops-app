@@ -1,25 +1,16 @@
-import { DEMO_MODE } from "@/lib/demo-mode"
 import { TEAM_MEMBERS } from "@/lib/data/settings"
-import type { Call, GoogleSheetSync, Lead, Meeting } from "@/types"
+import type { Call, Lead, Meeting } from "@/types"
 
 /**
  * Google Sheets sync integration seam — a free, simple lead-export target
  * many small businesses already use. A real implementation needs a Google
  * Cloud project + the Sheets API + a service account or OAuth grant; none
- * of that exists here, so `status` always reports "not-connected" and every
- * "sync" is a local no-op that just moves the demo counters. UI surfaces
- * must always label this as simulated — never claim a real sheet is synced.
+ * of that exists here, so every "sync" below is a local no-op that just
+ * moves the demo counters. UI surfaces must always label this as
+ * simulated — never claim a real sheet is synced. Real per-workspace
+ * status comes from useProviderStatus("google-sheets"), never from a
+ * DEMO_MODE flag (see src/lib/store/sheets-store.tsx).
  */
-
-export function getSheetsIntegrationStatus(): GoogleSheetSync {
-  return {
-    status: DEMO_MODE ? "not-connected" : "connected",
-    sheetUrl: undefined,
-    lastSyncAt: null,
-    rowsAdded: 0,
-    errors: 0,
-  }
-}
 
 export const LEAD_SHEET_COLUMNS = [
   "Lead ID",

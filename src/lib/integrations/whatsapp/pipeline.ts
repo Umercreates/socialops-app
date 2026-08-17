@@ -65,6 +65,7 @@ export async function processInboundMessage(msg: InboundTextMessage): Promise<{ 
     msg.displayPhoneNumber
   )
   const conversation = await ensureConversation(msg.workspaceId, account.id, msg.from)
+  const whatsappCtx = { toNumber: msg.from, phoneNumberId: msg.phoneNumberId, accessToken: msg.accessToken, conversationId: conversation.id }
 
   const inserted = await insertInboundMessageIfNew(
     msg.workspaceId,
@@ -95,6 +96,7 @@ export async function processInboundMessage(msg: InboundTextMessage): Promise<{ 
     await dispatchAutomationEvent("whatsapp-started", {
       workspaceId: msg.workspaceId,
       leadId: lead.id,
+      whatsapp: whatsappCtx,
       dedupeKey: msg.externalMessageId,
     })
   }
@@ -110,6 +112,7 @@ export async function processInboundMessage(msg: InboundTextMessage): Promise<{ 
       workspaceId: msg.workspaceId,
       leadId,
       messageBody: msg.body,
+      whatsapp: whatsappCtx,
       dedupeKey: msg.externalMessageId,
     })
   }
@@ -155,8 +158,6 @@ export async function processInboundMessage(msg: InboundTextMessage): Promise<{ 
   if (turn.escalate && turn.escalationReason) {
     await createActivity(msg.workspaceId, leadId, null, "qualification-updated", `Escalated to human: ${turn.escalationReason}`)
   }
-
-  const whatsappCtx = { toNumber: msg.from, phoneNumberId: msg.phoneNumberId, accessToken: msg.accessToken }
 
   await dispatchAutomationEvent("lead-score-above", {
     workspaceId: msg.workspaceId,

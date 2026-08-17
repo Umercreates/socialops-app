@@ -1,5 +1,3 @@
-import { DEMO_MODE } from "@/lib/demo-mode"
-
 /**
  * WhatsApp integration seam. The real target here is the official
  * **WhatsApp Business Cloud API** (Meta) — never unofficial WhatsApp Web
@@ -13,21 +11,12 @@ import { DEMO_MODE } from "@/lib/demo-mode"
  *   `/messages` endpoint, which requires a Meta App, a verified business,
  *   and a permanent access token. None of that exists here, so it resolves
  *   locally instead of calling out.
+ *
+ * This module's "status" is intentionally demo-only (used exclusively by
+ * the demo-mode branch of whatsapp-store.tsx/connection-card.tsx) - the
+ * REAL WhatsApp connection status for a workspace comes from
+ * useProviderStatus("whatsapp"), never from a DEMO_MODE flag.
  */
-
-export interface WhatsAppIntegrationStatus {
-  configured: boolean
-  mode: "demo" | "live"
-  provider: "whatsapp-business-cloud-api"
-}
-
-export function getWhatsAppIntegrationStatus(): WhatsAppIntegrationStatus {
-  return {
-    configured: !DEMO_MODE,
-    mode: DEMO_MODE ? "demo" : "live",
-    provider: "whatsapp-business-cloud-api",
-  }
-}
 
 /** Real click-to-chat link — https://wa.me spec, no credentials required. */
 export function buildClickToChatLink(number: string, message: string): string {

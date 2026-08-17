@@ -1,23 +1,15 @@
-import { DEMO_MODE } from "@/lib/demo-mode"
 import type { Call, CallTranscriptLine } from "@/types"
 
 /**
- * AI calling / telephony integration seam. A real build behind this needs a
- * telephony provider (e.g. Twilio) plus STT/TTS and an LLM for the live
- * conversation — none of that is wired up. Every call in this app is a
- * scripted, timed simulation so the UI/UX can be validated before any of
- * that spend happens.
+ * AI calling / telephony integration seam. This is the OLD, pre-Phase-5
+ * simulation - the REAL OmniDimension backend (src/lib/integrations/
+ * omnidimension/, src/lib/platform/calls.ts) is what actually dispatches
+ * calls now. Everything in this file remains a scripted, timed
+ * simulation, used only when the workspace has no live OmniDimension
+ * connection - never presented as "live" based on a DEMO_MODE flag, which
+ * has no way to know whether any real workspace has actually connected
+ * anything (see useProviderStatus("omnidimension") for the real check).
  */
-
-export interface CallingIntegrationStatus {
-  configured: boolean
-  mode: "demo" | "live"
-  provider: "none"
-}
-
-export function getCallingIntegrationStatus(): CallingIntegrationStatus {
-  return { configured: !DEMO_MODE, mode: DEMO_MODE ? "demo" : "live", provider: "none" }
-}
 
 const SIMULATED_AGENT_LINES = [
   "Assalam-o-Alaikum! This is Aria calling from EasyLife — aap ne humari services mein interest show ki thi, do you have a couple of minutes?",

@@ -1,25 +1,29 @@
 "use client"
 
 import * as React from "react"
-import { CalendarClock, Loader2, CircleCheck } from "lucide-react"
+import Link from "next/link"
+import { CalendarClock, Loader2, CircleCheck, PlugZap, TriangleAlert } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { getCalendarIntegrationStatus, getMockAvailableSlots, simulateBookMeeting } from "@/lib/integrations/calendar"
+import { getMockAvailableSlots, simulateBookMeeting } from "@/lib/integrations/calendar"
 import { TEAM_MEMBERS } from "@/lib/data/settings"
 import { useMeetings } from "@/lib/store/meetings-store"
 import { useLeads } from "@/lib/store/leads-store"
+import { useDemoMode } from "@/lib/demo-mode-context"
+import { useProviderStatus } from "@/lib/hooks/use-provider-status"
 import type { Lead } from "@/types"
 
 const SLOTS = getMockAvailableSlots(5)
 const TIMEZONE = "Asia/Karachi"
 
 export function BookMeetingDialog({ lead, open, onOpenChange }: { lead: Lead | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const demoMode = useDemoMode()
+  const { view, loading, isLive } = useProviderStatus("google-calendar")
   const { addMeeting } = useMeetings()
   const { setMeetingStatus, setStage, addNote } = useLeads()
-  const integrationStatus = getCalendarIntegrationStatus()
   const [slotKey, setSlotKey] = React.useState(`${SLOTS[0].date}|${SLOTS[0].time}`)
   const [assignedTo, setAssignedTo] = React.useState(TEAM_MEMBERS[0]?.id ?? "")
   const [notes, setNotes] = React.useState("")
@@ -59,6 +63,53 @@ export function BookMeetingDialog({ lead, open, onOpenChange }: { lead: Lead | n
     setStep("done")
   }
 
+  // Outside demo mode there is no real Google Calendar event-creation
+  // adapter yet - never fabricate a meeting or a Meet link just because a
+  // workspace has connected the provider. Connected-but-unimplemented and
+  // not-connected are both handled honestly, distinctly from the demo path.
+  if (!demoMode && lead) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Book a meeting with {lead.name}</DialogTitle>
+          </DialogHeader>
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              Checking Google Calendar...
+            </div>
+          ) : !isLive ? (
+            <div className="flex flex-col items-center gap-3 py-6 text-center">
+              <TriangleAlert className="size-6 text-muted-foreground" />
+              <p className="text-sm font-medium text-foreground">Google Calendar isn&apos;t connected</p>
+              <p className="text-xs text-muted-foreground">
+                {view?.status === "not_configured" ? "Connect it in Integrations to book real meetings." : "Finish setup in Integrations to activate it."}
+              </p>
+              <Button size="sm" className="mt-1" render={<Link href="/dashboard/integrations" />} nativeButton={false}>
+                <PlugZap />
+                Connect Google Calendar
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3 py-6 text-center">
+              <TriangleAlert className="size-6 text-muted-foreground" />
+              <p className="text-sm font-medium text-foreground">Meeting booking isn&apos;t available yet</p>
+              <p className="text-xs text-muted-foreground">
+                Google Calendar is connected, but EasyLife doesn&apos;t create real calendar events yet - that&apos;s architecture-ready, not implemented.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -66,11 +117,7 @@ export function BookMeetingDialog({ lead, open, onOpenChange }: { lead: Lead | n
           <>
             <DialogHeader>
               <DialogTitle>Book a meeting with {lead.name}</DialogTitle>
-              <DialogDescription>
-                {integrationStatus.mode === "demo"
-                  ? "Demo mode — no Google Calendar is connected, this simulates booking without creating a real event."
-                  : "Booked directly to the connected Google Calendar."}
-              </DialogDescription>
+              <DialogDescription>Demo mode — no Google Calendar is connected, this simulates booking without creating a real event.</DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">

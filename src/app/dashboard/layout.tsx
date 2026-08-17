@@ -8,9 +8,10 @@ export default async function DashboardLayout({ children }: LayoutProps<"/dashbo
   // Forces this read to happen at request time — see app/layout.tsx for why.
   await connection()
   const crmMode = process.env.CRM_MODE === "database" ? "database" : "demo"
+  const demoMode = process.env.DEMO_MODE !== "false"
 
   return (
-    <DashboardShell notifications={notifications} crmMode={crmMode}>
+    <DashboardShell notifications={notifications} crmMode={crmMode} demoMode={demoMode}>
       {children}
     </DashboardShell>
   )

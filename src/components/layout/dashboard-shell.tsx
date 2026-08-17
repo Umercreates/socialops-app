@@ -5,27 +5,31 @@ import { AppSidebar } from "@/components/layout/app-sidebar"
 import { MobileSidebar } from "@/components/layout/mobile-sidebar"
 import { AppHeader } from "@/components/layout/app-header"
 import { MockDataProvider } from "@/lib/store/mock-data-provider"
+import { DemoModeProvider } from "@/lib/demo-mode-context"
 import type { Notification } from "@/types"
 
 interface DashboardShellProps {
   children: React.ReactNode
   notifications: Notification[]
   crmMode?: "demo" | "database"
+  demoMode?: boolean
 }
 
-export function DashboardShell({ children, notifications, crmMode = "demo" }: DashboardShellProps) {
+export function DashboardShell({ children, notifications, crmMode = "demo", demoMode = true }: DashboardShellProps) {
   return (
-    <MockDataProvider crmMode={crmMode}>
-      <SidebarProvider>
-        <div className="flex min-h-screen w-full bg-background">
-          <AppSidebar />
-          <MobileSidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <AppHeader notifications={notifications} />
-            <main className="flex flex-1 flex-col">{children}</main>
+    <DemoModeProvider demoMode={demoMode}>
+      <MockDataProvider crmMode={crmMode}>
+        <SidebarProvider>
+          <div className="flex min-h-screen w-full bg-background">
+            <AppSidebar />
+            <MobileSidebar />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <AppHeader notifications={notifications} />
+              <main className="flex flex-1 flex-col">{children}</main>
+            </div>
           </div>
-        </div>
-      </SidebarProvider>
-    </MockDataProvider>
+        </SidebarProvider>
+      </MockDataProvider>
+    </DemoModeProvider>
   )
 }

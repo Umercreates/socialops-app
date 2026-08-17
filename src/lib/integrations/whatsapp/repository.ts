@@ -169,7 +169,7 @@ export async function insertOutboundMessage(
   workspaceId: string,
   conversationId: string,
   body: string,
-  sender: "bot" | "agent",
+  sender: "bot" | "agent" | "automation",
   externalMessageId: string | null,
   providerStatus: "sent" | "failed"
 ) {
