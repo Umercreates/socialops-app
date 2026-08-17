@@ -148,6 +148,8 @@ export async function saveConnection(input: SaveConnectionInput): Promise<Provid
     }
   }
 
+  const hasFieldChanges = Object.keys(config).length > 0 || Object.keys(secretDataEncrypted).length > 0
+
   const existing = await getConnection(input.workspaceId, input.provider)
   const isFirstSave = !existing
 
@@ -159,6 +161,7 @@ export async function saveConnection(input: SaveConnectionInput): Promise<Provid
     displayName: input.displayName,
     config,
     secretDataEncrypted,
+    resetTestState: hasFieldChanges,
   })
 
   await recordAuditEvent(

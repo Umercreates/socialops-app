@@ -64,10 +64,22 @@ export async function PUT(request: Request, ctx: { params: Promise<{ provider: s
 
     // Live mode must be genuinely earned, never just requested - only a
     // provider that's already fully readiness-checked (existing credentials/
-    // OAuth/webhook/passing test) can be flipped to live from here. New
-    // credentials being saved this same call haven't been tested yet, so
-    // this checks the state as it stood *before* this save.
+    // OAuth/webhook/passing test) can be flipped to live from here.
     if (body.mode === "live") {
+      // Changing a credential value in this exact same call must never
+      // reach live in one step - "readiness" below would otherwise reflect
+      // a *previous* credential's passing test, not this new, untested one
+      // (saveConnection clears that stale test-passed state after this
+      // request, but only after the gate below has already run). Activating
+      // live always requires its own separate Test Connection round trip.
+      const changingFields = Object.values(body.fields).some((v) => v)
+      if (changingFields) {
+        return NextResponse.json(
+          { error: "Save the new credentials, then run Test Connection again before activating live mode." },
+          { status: 400 }
+        )
+      }
+
       const readiness = await evaluateProviderReadiness(auth.ctx.workspaceId, provider)
       if (!readiness.readyForLive) {
         return NextResponse.json(

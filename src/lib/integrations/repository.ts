@@ -49,6 +49,18 @@ export interface UpsertConnectionInput {
   /** Already-encrypted blobs, merged over any existing ones (a field key
    * absent here leaves the previously-stored value untouched). */
   secretDataEncrypted?: Record<string, string>
+  /** True whenever this call is actually writing new credential values.
+   * A previous "Test Connection passed" is evidence about the credential
+   * that was live at the time - it says nothing about a replacement
+   * credential that has never itself been tested. Without this, changing
+   * credentials on an already-live connection would silently leave it
+   * reporting readyForLive/live with an entirely unverified value - a real
+   * "No Fake Live Mode" gap. Clears the test-passed state and drops mode
+   * out of "live" (the caller may re-request "live" in the same input,
+   * which the API route is responsible for rejecting when fields also
+   * changed - this only supplies the safe default for every other path,
+   * e.g. a second, separate save call after the first). */
+  resetTestState?: boolean
 }
 
 export async function upsertConnection(input: UpsertConnectionInput): Promise<IntegrationConnectionRow> {
@@ -66,11 +78,14 @@ export async function upsertConnection(input: UpsertConnectionInput): Promise<In
       const [updated] = await db
         .update(integrationConnections)
         .set({
-          mode: input.mode ?? row.mode,
+          mode: input.mode ?? (input.resetTestState && row.mode === "live" ? "demo" : row.mode),
           status: input.status ?? row.status,
           displayName: input.displayName !== undefined ? input.displayName : row.displayName,
           config: mergedConfig,
           secretDataEncrypted: mergedSecrets,
+          ...(input.resetTestState
+            ? { lastSuccessAt: null, lastTestedAt: null, lastErrorCode: null, lastErrorMessage: null }
+            : {}),
           updatedAt: new Date(),
         })
         .where(eq(integrationConnections.id, row.id))
