@@ -14,7 +14,6 @@ import {
 } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { formatRelativeTime } from "@/lib/format"
-import { MOCK_NOW } from "@/lib/data/constants"
 import type { Notification, NotificationType } from "@/types"
 import { cn } from "@/lib/utils"
 
@@ -46,12 +45,17 @@ export function NotificationPanel({ initialNotifications }: NotificationPanelPro
   const [notifications, setNotifications] = React.useState(initialNotifications)
   const unreadCount = notifications.filter((n) => !n.read).length
 
-  function markAllRead() {
+  async function markAllRead() {
+    const unread = notifications.filter((n) => !n.read)
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    await Promise.all(
+      unread.map((n) => fetch(`/api/notifications/${n.id}`, { method: "PATCH", credentials: "same-origin" }).catch(() => null))
+    )
   }
 
-  function markRead(id: string) {
+  async function markRead(id: string) {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+    await fetch(`/api/notifications/${id}`, { method: "PATCH", credentials: "same-origin" }).catch(() => null)
   }
 
   return (
@@ -115,7 +119,7 @@ export function NotificationPanel({ initialNotifications }: NotificationPanelPro
                     </span>
                     <span className="line-clamp-2 text-xs text-muted-foreground">{notification.description}</span>
                     <span className="text-[11px] text-muted-foreground/70">
-                      {formatRelativeTime(notification.createdAt, MOCK_NOW)}
+                      {formatRelativeTime(notification.createdAt, new Date())}
                     </span>
                   </span>
                 </button>

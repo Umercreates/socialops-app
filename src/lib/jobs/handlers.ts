@@ -1,6 +1,7 @@
 import { enqueueJob, type JobType, type ClaimedJob } from "./queue"
-import { isProviderId } from "@/lib/integrations/providers"
+import { isProviderId, PROVIDER_REGISTRY } from "@/lib/integrations/providers"
 import { getConnection } from "@/lib/integrations/repository"
+import { createNotification } from "@/lib/platform/notifications"
 import { resolveCredentialValue, storeOAuthTokens } from "@/lib/integrations/service"
 import { refreshAccessToken } from "@/lib/integrations/oauth"
 import { resolveActiveConnection } from "@/lib/integrations/credential-resolution"
@@ -45,11 +46,30 @@ async function refreshTokenHandler(job: ClaimedJob): Promise<void> {
   const { value: clientId } = resolveCredentialValue(row, "clientId", provider)
   const { value: clientSecret } = resolveCredentialValue(row, "clientSecret", provider)
   if (!refreshToken || !clientId || !clientSecret) {
+    // Not every provider issues a refresh token to a standard (non-partner)
+    // app - LinkedIn is a known example. Only worth a notification once
+    // this attempt is truly exhausted, not on the first check.
+    if (job.attempts >= job.maxAttempts) {
+      await createNotification({
+        workspaceId: job.workspaceId,
+        type: "account-warning",
+        title: `${PROVIDER_REGISTRY[provider].name} needs reconnecting`,
+        description: "No refresh token is available - reconnect this provider in Integrations before its access token expires.",
+      })
+    }
     throw new Error(`${provider} is not connected via OAuth - nothing to refresh`)
   }
 
   const result = await refreshAccessToken(provider, refreshToken, clientId, clientSecret)
   if (!result.ok || !result.accessToken) {
+    if (job.attempts >= job.maxAttempts) {
+      await createNotification({
+        workspaceId: job.workspaceId,
+        type: "account-warning",
+        title: `${PROVIDER_REGISTRY[provider].name} connection expired`,
+        description: result.error ?? "Token refresh failed - reconnect this provider in Integrations.",
+      })
+    }
     throw new Error(result.error ?? "Token refresh failed")
   }
 
@@ -103,7 +123,10 @@ async function dispatchCallHandler(job: ClaimedJob): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown call dispatch error"
     const isFinalAttempt = job.attempts >= job.maxAttempts
-    if (isFinalAttempt) await markCallFailed(callId, message)
+    if (isFinalAttempt) {
+      await markCallFailed(callId, message)
+      await createNotification({ workspaceId: job.workspaceId, type: "call-completed", title: "Call couldn't be placed", description: message })
+    }
     throw error
   }
 }

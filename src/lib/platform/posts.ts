@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { and, eq } from "drizzle-orm"
 import { withDb } from "@/lib/db/client"
 import { posts, postTargets } from "@/lib/db/schema"
+import { createNotification } from "@/lib/platform/notifications"
 import type { Post, PostStatus, PostMedia, PostVariant, SocialPlatform } from "@/types"
 
 function rowToPost(row: typeof posts.$inferSelect, authorName: string, authorId: string): Post {
@@ -204,4 +205,14 @@ export async function recomputePostStatus(workspaceId: string, postId: string): 
   const allFailed = targets.every((t) => t.status === "failed" || t.status === "blocked")
   const status: PostStatus = allPublished ? "published" : allFailed ? "failed" : "partially_failed"
   await setPostStatus(workspaceId, postId, status)
+
+  if (status === "failed" || status === "partially_failed") {
+    const post = await getPost(workspaceId, postId)
+    await createNotification({
+      workspaceId,
+      type: "publish-failed",
+      title: status === "failed" ? "Post failed to publish" : "Post partially failed to publish",
+      description: post ? `"${post.title || post.baseCaption.slice(0, 60) || "Untitled post"}" - check the target results for details.` : undefined,
+    })
+  }
 }
