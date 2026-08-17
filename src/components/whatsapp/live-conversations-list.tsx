@@ -1,10 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { Loader2, Bot, UserCheck } from "lucide-react"
+import { Loader2, Bot, UserCheck, Send } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/dashboard/status-badge"
 import { LeadScoreBadge } from "@/components/leads/lead-score-badge"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 import type { Lead } from "@/types"
 
 interface ConversationSummary {
@@ -45,32 +47,94 @@ export function LiveConversationsList() {
   const [error, setError] = React.useState<string | null>(null)
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const [messages, setMessages] = React.useState<MessageView[] | null>(null)
+  const [replyBody, setReplyBody] = React.useState("")
+  const [sending, setSending] = React.useState(false)
+  const [sendError, setSendError] = React.useState<string | null>(null)
+
+  const refreshConversations = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/whatsapp/conversations", { credentials: "same-origin" })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setConversations(data.conversations)
+    } catch {
+      setError("Couldn't load conversations.")
+    }
+  }, [])
 
   React.useEffect(() => {
-    fetch("/api/whatsapp/conversations", { credentials: "same-origin" })
-      .then((res) => {
+    async function load() {
+      try {
+        const res = await fetch("/api/whatsapp/conversations", { credentials: "same-origin" })
         if (!res.ok) throw new Error()
-        return res.json()
-      })
-      .then((data) => setConversations(data.conversations))
-      .catch(() => setError("Couldn't load conversations."))
+        const data = await res.json()
+        setConversations(data.conversations)
+      } catch {
+        setError("Couldn't load conversations.")
+      }
+    }
+    load()
   }, [])
 
   const [syncedSelectedId, setSyncedSelectedId] = React.useState(selectedId)
   if (selectedId !== syncedSelectedId) {
     setSyncedSelectedId(selectedId)
     setMessages(null)
+    setReplyBody("")
+    setSendError(null)
   }
+
+  const refreshMessages = React.useCallback(async (conversationId: string) => {
+    try {
+      const res = await fetch(`/api/whatsapp/conversations/${conversationId}/messages`, { credentials: "same-origin" })
+      const data = await res.json()
+      setMessages(data.messages)
+    } catch {
+      setMessages([])
+    }
+  }, [])
 
   React.useEffect(() => {
     if (!selectedId) return
-    fetch(`/api/whatsapp/conversations/${selectedId}/messages`, { credentials: "same-origin" })
-      .then((res) => res.json())
-      .then((data) => setMessages(data.messages))
-      .catch(() => setMessages([]))
+    const conversationId = selectedId
+    async function load() {
+      try {
+        const res = await fetch(`/api/whatsapp/conversations/${conversationId}/messages`, { credentials: "same-origin" })
+        const data = await res.json()
+        setMessages(data.messages)
+      } catch {
+        setMessages([])
+      }
+    }
+    load()
   }, [selectedId])
 
   const selected = conversations?.find((c) => c.id === selectedId) ?? null
+
+  async function sendReply() {
+    if (!selectedId || !replyBody.trim()) return
+    setSending(true)
+    setSendError(null)
+    try {
+      const res = await fetch(`/api/whatsapp/conversations/${selectedId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ body: replyBody.trim() }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        setSendError(data?.error ?? "Couldn't send the message.")
+        return
+      }
+      setReplyBody("")
+      await Promise.all([refreshMessages(selectedId), refreshConversations()])
+    } catch {
+      setSendError("Couldn't reach the server.")
+    } finally {
+      setSending(false)
+    }
+  }
 
   if (error) {
     return (
@@ -156,6 +220,27 @@ export function LiveConversationsList() {
                 ))
               )}
             </CardContent>
+            <div className="flex flex-col gap-1.5 border-t border-border pt-3">
+              {sendError && <p className="text-xs text-destructive">{sendError}</p>}
+              <div className="flex items-end gap-2">
+                <Textarea
+                  value={replyBody}
+                  onChange={(e) => setReplyBody(e.target.value)}
+                  placeholder="Type a reply…"
+                  className="min-h-9 flex-1 resize-none"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault()
+                      sendReply()
+                    }
+                  }}
+                />
+                <Button size="sm" onClick={sendReply} disabled={sending || !replyBody.trim()}>
+                  {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+                  Send
+                </Button>
+              </div>
+            </div>
           </>
         )}
       </Card>
