@@ -445,3 +445,17 @@ export const googleSheetsSelections = socialops.table("google_sheets_selections"
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 })
+
+export const googleSheetsSyncedRows = socialops.table("google_sheets_synced_rows", {
+  id: uuid("id").primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  leadId: uuid("lead_id").notNull(),
+  spreadsheetId: text("spreadsheet_id").notNull(),
+  worksheetName: text("worksheet_name").notNull(),
+  rowNumber: integer("row_number").notNull(),
+  lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+  lastStatus: text("last_status").notNull().default("pending"),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})

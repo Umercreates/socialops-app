@@ -13,6 +13,7 @@ import type { ProviderConnectionView, IntegrationMode } from "./types"
 import { PROVIDER_REGISTRY } from "@/lib/integrations/providers"
 import { cn } from "@/lib/utils"
 import { FacebookPageSelector } from "./facebook-page-selector"
+import { GoogleSheetsPicker } from "./google-sheets-picker"
 
 interface ProviderDetailSheetProps {
   provider: ProviderConnectionView | null
@@ -234,6 +235,10 @@ export function ProviderDetailSheet({ provider, canManage, open, onOpenChange, o
 
           {provider.provider === "facebook" && provider.readiness.oauthComplete && (
             <FacebookPageSelector canManage={canManage} />
+          )}
+
+          {provider.provider === "google-sheets" && provider.readiness.oauthComplete && (
+            <GoogleSheetsPicker canManage={canManage} />
           )}
 
           {webhookUrl && (

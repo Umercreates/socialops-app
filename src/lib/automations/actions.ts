@@ -6,6 +6,7 @@ import { resolveCredentialValue } from "@/lib/integrations/service"
 import { enqueueJob } from "@/lib/jobs/queue"
 import { sendWhatsAppTextMessage } from "@/lib/integrations/whatsapp/cloud-api"
 import { insertOutboundMessage, updateConversation } from "@/lib/integrations/whatsapp/repository"
+import { syncLeadToSheet } from "@/lib/integrations/google-sheets/sync"
 import type { AutomationActionType } from "@/types"
 
 /**
@@ -158,6 +159,14 @@ async function scheduleFollowUp(actionValue: string | undefined, ctx: ActionCont
   return { status: "completed" }
 }
 
+async function syncSheetRow(ctx: ActionContext): Promise<ActionResult> {
+  if (!ctx.leadId) return blocked("No lead associated with this event.")
+  const result = await syncLeadToSheet(ctx.workspaceId, ctx.leadId)
+  if (result.status === "blocked") return blocked(result.errorMessage ?? "Google Sheets is not ready for this workspace.")
+  if (result.status === "failed") return { status: "failed", errorMessage: result.errorMessage ?? "Google Sheets sync failed" }
+  return { status: "completed" }
+}
+
 function notYetImplemented(capability: string): () => Promise<ActionResult> {
   return async () => blocked(`${capability} is architecture-ready but has no live provider connected yet.`)
 }
@@ -192,7 +201,7 @@ export async function executeAction(actionType: AutomationActionType, actionValu
       return notYetImplemented("Meeting booking")()
     case "add-sheet-row":
     case "update-sheet-row":
-      return notYetImplemented("Google Sheets sync")()
+      return syncSheetRow(ctx)
     case "send-booking-link":
       return notYetImplemented("Booking link generation")()
     default:

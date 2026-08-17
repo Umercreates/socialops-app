@@ -87,3 +87,85 @@ export async function listWorksheets(accessToken: string, spreadsheetId: string)
     return { ok: false, error: error instanceof Error ? error.message : "Couldn't reach the Google Sheets API." }
   }
 }
+
+/** A1-notation quoting: a sheet/worksheet name needs single quotes around
+ * it whenever it contains anything other than letters, digits, or
+ * underscores (spaces, punctuation, etc.) - an embedded quote is escaped
+ * by doubling it, same rule Sheets itself uses. */
+function quoteSheetName(name: string): string {
+  if (/^[A-Za-z0-9_]+$/.test(name)) return name
+  return `'${name.replace(/'/g, "''")}'`
+}
+
+export interface AppendRowResult {
+  ok: boolean
+  rowNumber?: number
+  error?: string
+}
+
+/** POST .../values/{range}:append - always lands on the first empty row
+ * below any existing data (insertDataOption=INSERT_ROWS), so this never
+ * needs to know how many rows already exist. The response's updatedRange
+ * (e.g. "Sheet1!A5:J5") is the only way to learn which row was actually
+ * written, since Sheets - not this app - decides that. */
+export async function appendRow(accessToken: string, spreadsheetId: string, worksheetName: string, values: string[]): Promise<AppendRowResult> {
+  try {
+    const range = `${quoteSheetName(worksheetName)}!A1`
+    const url = new URL(`${SHEETS_BASE_URL}/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}:append`)
+    url.searchParams.set("valueInputOption", "USER_ENTERED")
+    url.searchParams.set("insertDataOption", "INSERT_ROWS")
+
+    const res = await fetch(url.toString(), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(15000),
+      body: JSON.stringify({ values: [values] }),
+    })
+    const json = await res.json().catch(() => null)
+
+    if (res.status === 401) return { ok: false, error: "Google authorization has expired - reconnect Google in Integrations." }
+    if (!res.ok) return { ok: false, error: json?.error?.message ?? `Google Sheets API returned ${res.status}` }
+
+    // updatedRange looks like "Sheet1!A5:J5" (or "'My Sheet'!A5:J5") - the
+    // row number is the trailing digits of the last cell reference.
+    const updatedRange = json?.updates?.updatedRange as string | undefined
+    const lastCell = updatedRange?.split(":").pop()
+    const match = lastCell?.match(/(\d+)$/)
+    const rowNumber = match ? Number(match[1]) : undefined
+    if (!rowNumber) return { ok: false, error: "Row was appended but its row number couldn't be determined." }
+    return { ok: true, rowNumber }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Couldn't reach the Google Sheets API." }
+  }
+}
+
+export interface UpdateRowResult {
+  ok: boolean
+  error?: string
+}
+
+/** PUT .../values/{range} - overwrites one already-known row (from a
+ * prior appendRow's rowNumber), so a lead that's synced before never
+ * grows a second row on a later sync. */
+export async function updateRow(accessToken: string, spreadsheetId: string, worksheetName: string, rowNumber: number, values: string[]): Promise<UpdateRowResult> {
+  try {
+    const lastColumn = String.fromCharCode("A".charCodeAt(0) + values.length - 1)
+    const range = `${quoteSheetName(worksheetName)}!A${rowNumber}:${lastColumn}${rowNumber}`
+    const url = new URL(`${SHEETS_BASE_URL}/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}`)
+    url.searchParams.set("valueInputOption", "USER_ENTERED")
+
+    const res = await fetch(url.toString(), {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(15000),
+      body: JSON.stringify({ values: [values] }),
+    })
+    const json = await res.json().catch(() => null)
+
+    if (res.status === 401) return { ok: false, error: "Google authorization has expired - reconnect Google in Integrations." }
+    if (!res.ok) return { ok: false, error: json?.error?.message ?? `Google Sheets API returned ${res.status}` }
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Couldn't reach the Google Sheets API." }
+  }
+}

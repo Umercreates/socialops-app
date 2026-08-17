@@ -1,0 +1,143 @@
+import type { Lead } from "@/types"
+import { resolveActiveConnection } from "@/lib/integrations/credential-resolution"
+import { resolveCredentialValue } from "@/lib/integrations/service"
+import { getGoogleSheetsSelection } from "@/lib/platform/google-sheets-selection"
+import { getSyncedRow, recordSyncResult } from "@/lib/platform/google-sheets-sync"
+import { getLead } from "@/lib/leads/repository"
+import { appendRow, updateRow } from "./client"
+
+/**
+ * PostgreSQL stays the source of truth for CRM data - this only mirrors a
+ * lead's current state into the workspace's chosen spreadsheet as a
+ * secondary, human-browsable export. The available field set is fixed for
+ * now (matches what a Lead actually has); columnMapping only controls
+ * which spreadsheet column each field lands in, not which fields exist.
+ */
+export const SHEET_FIELD_KEYS = ["name", "phone", "email", "company", "service", "source", "lead_score", "status", "next_action", "updated_at"] as const
+export type SheetFieldKey = (typeof SHEET_FIELD_KEYS)[number]
+
+const DEFAULT_COLUMN_MAPPING: Record<SheetFieldKey, string> = {
+  name: "A",
+  phone: "B",
+  email: "C",
+  company: "D",
+  service: "E",
+  source: "F",
+  lead_score: "G",
+  status: "H",
+  next_action: "I",
+  updated_at: "J",
+}
+
+function fieldValue(lead: Lead, key: SheetFieldKey): string {
+  switch (key) {
+    case "name":
+      return lead.name
+    case "phone":
+      return lead.whatsappNumber ?? ""
+    case "email":
+      return lead.email ?? ""
+    case "company":
+      return lead.company ?? ""
+    case "service":
+      return lead.qualification.serviceInterested ?? ""
+    case "source":
+      return lead.source.platform
+    case "lead_score":
+      return String(lead.score)
+    case "status":
+      return lead.status
+    case "next_action":
+      return lead.nextFollowUpAt ?? ""
+    case "updated_at":
+      return lead.updatedAt
+  }
+}
+
+function columnLetterToIndex(letter: string): number {
+  let index = 0
+  for (const char of letter.toUpperCase()) {
+    index = index * 26 + (char.charCodeAt(0) - "A".charCodeAt(0) + 1)
+  }
+  return index - 1
+}
+
+/** Builds one contiguous row (starting at column A) wide enough to reach
+ * the furthest-mapped field, honoring a workspace's custom column
+ * ordering/gaps - a field mapped to an unused later column doesn't need
+ * every column before it to also be mapped. */
+function buildRowValues(lead: Lead, columnMapping: Record<string, string>): string[] {
+  const mapping = { ...DEFAULT_COLUMN_MAPPING, ...columnMapping } as Record<string, string>
+  let width = 0
+  const cells: Record<number, string> = {}
+  for (const key of SHEET_FIELD_KEYS) {
+    const letter = mapping[key]
+    if (!letter) continue
+    const index = columnLetterToIndex(letter)
+    if (index < 0) continue
+    cells[index] = fieldValue(lead, key)
+    width = Math.max(width, index + 1)
+  }
+  return Array.from({ length: width }, (_, i) => cells[i] ?? "")
+}
+
+export interface SyncLeadResult {
+  status: "synced" | "blocked" | "failed"
+  errorMessage?: string
+}
+
+/** Syncs one lead's current state into the workspace's selected
+ * spreadsheet - updates its existing row if it already has one (idempotent:
+ * re-syncing the same lead never creates a second row), otherwise appends
+ * a new row and remembers where it landed for next time. */
+export async function syncLeadToSheet(workspaceId: string, leadId: string): Promise<SyncLeadResult> {
+  const { live, row } = await resolveActiveConnection(workspaceId, "google-sheets")
+  if (!live) return { status: "blocked", errorMessage: "Google Sheets is not connected and activated for this workspace." }
+
+  const { value: accessToken } = resolveCredentialValue(row, "accessToken", "google-sheets")
+  if (!accessToken) return { status: "blocked", errorMessage: "No Google access token on file - reconnect Google in Integrations." }
+
+  const selection = await getGoogleSheetsSelection(workspaceId)
+  if (!selection) return { status: "blocked", errorMessage: "No spreadsheet selected for this workspace - choose one in Integrations." }
+
+  const lead = await getLead(workspaceId, leadId)
+  if (!lead) return { status: "failed", errorMessage: "Lead not found." }
+
+  const values = buildRowValues(lead, selection.columnMapping)
+  const existing = await getSyncedRow(workspaceId, leadId, selection.spreadsheetId, selection.worksheetName)
+
+  if (existing) {
+    const result = await updateRow(accessToken, selection.spreadsheetId, selection.worksheetName, existing.rowNumber, values)
+    await recordSyncResult({
+      workspaceId,
+      leadId,
+      spreadsheetId: selection.spreadsheetId,
+      worksheetName: selection.worksheetName,
+      rowNumber: existing.rowNumber,
+      status: result.ok ? "synced" : "failed",
+      error: result.error,
+    })
+    if (!result.ok) return { status: "failed", errorMessage: result.error }
+    return { status: "synced" }
+  }
+
+  const result = await appendRow(accessToken, selection.spreadsheetId, selection.worksheetName, values)
+  if (!result.ok || !result.rowNumber) {
+    // Deliberately no recordSyncResult here: a failed append never created
+    // a row, so there is no rowNumber worth remembering - recording one
+    // (even a placeholder) would make the next sync attempt treat this
+    // lead as already having a row and try to update a row that doesn't
+    // exist. The automation run itself already records this failure.
+    return { status: "failed", errorMessage: result.error }
+  }
+
+  await recordSyncResult({
+    workspaceId,
+    leadId,
+    spreadsheetId: selection.spreadsheetId,
+    worksheetName: selection.worksheetName,
+    rowNumber: result.rowNumber,
+    status: "synced",
+  })
+  return { status: "synced" }
+}

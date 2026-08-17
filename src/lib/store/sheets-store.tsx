@@ -50,12 +50,15 @@ export function useGoogleSheets() {
   const syncLead = React.useCallback(
     async (lead: Lead, latestCall?: Call, meeting?: Meeting) => {
       if (!demoMode) {
-        return {
-          ok: false,
-          row: undefined,
-          message: isLive
-            ? "Google Sheets is connected, but syncing rows isn't implemented yet."
-            : "Google Sheets isn't connected for this workspace - connect it in Integrations.",
+        if (!isLive) {
+          return { ok: false, row: undefined, message: "Google Sheets isn't connected for this workspace - connect it in Integrations." }
+        }
+        try {
+          const res = await fetch(`/api/leads/${lead.id}/sync-sheet`, { method: "POST", credentials: "same-origin" })
+          const data = await res.json()
+          return { ok: Boolean(data.ok), row: undefined, message: data.message ?? (data.ok ? "Synced." : "Sync failed.") }
+        } catch {
+          return { ok: false, row: undefined, message: "Couldn't reach the server." }
         }
       }
       const result = await simulateSyncLeadToSheet(lead, latestCall, meeting)

@@ -23,7 +23,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   }
 }
 
-const mediaSchema = z.object({ id: z.string(), type: z.enum(["image", "video"]), url: z.string(), name: z.string() })
+const mediaSchema = z.object({ id: z.string(), type: z.enum(["image", "video"]), url: z.string(), name: z.string(), mediaAssetId: z.string().uuid().optional() })
 const variantSchema = z.object({
   platform: z.string(),
   enabled: z.boolean(),

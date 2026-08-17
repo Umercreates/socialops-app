@@ -8,7 +8,7 @@ import { enqueueJob } from "@/lib/jobs/queue"
 import { apiError } from "@/lib/api/errors"
 import type { PostMedia, PostVariant, SocialPlatform } from "@/types"
 
-const mediaSchema = z.object({ id: z.string(), type: z.enum(["image", "video"]), url: z.string(), name: z.string() })
+const mediaSchema = z.object({ id: z.string(), type: z.enum(["image", "video"]), url: z.string(), name: z.string(), mediaAssetId: z.string().uuid().optional() })
 const variantSchema = z.object({
   platform: z.string(),
   enabled: z.boolean(),
