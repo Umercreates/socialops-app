@@ -10,8 +10,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { SearchTrigger } from "@/components/layout/search-trigger"
 import { NotificationPanel } from "@/components/layout/notification-panel"
 import { UserMenu } from "@/components/layout/user-menu"
+import { DashboardModeSwitcher, DemoModeBadge } from "@/components/layout/dashboard-mode-switcher"
 import { useSidebar } from "@/components/layout/sidebar-context"
-import { useSocialAccounts } from "@/lib/store/accounts-store"
+import { useConnectedAccountsSummary } from "@/lib/hooks/use-connected-accounts-summary"
+import { useDashboardViewMode } from "@/lib/dashboard-view-mode-context"
 import { ALL_NAV_ITEMS } from "@/lib/nav-config"
 
 function useActiveSectionTitle() {
@@ -26,8 +28,8 @@ function useActiveSectionTitle() {
 export function AppHeader() {
   const { setIsMobileOpen } = useSidebar()
   const sectionTitle = useActiveSectionTitle()
-  const { accounts } = useSocialAccounts()
-  const connectedAccounts = accounts.filter((a) => a.health !== "disconnected").length
+  const { mode } = useDashboardViewMode()
+  const { connected: connectedAccounts, total: totalAccounts } = useConnectedAccountsSummary()
 
   return (
     <header className="sticky top-0 z-30 flex h-(--header-height) shrink-0 items-center gap-2 border-b border-border bg-background/95 px-4 backdrop-blur supports-backdrop-filter:bg-background/80 sm:px-6">
@@ -41,6 +43,8 @@ export function AppHeader() {
       </button>
 
       <h1 className="truncate text-[15px] font-medium text-foreground">{sectionTitle}</h1>
+
+      {mode === "demo" && <DemoModeBadge />}
 
       <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
         <SearchTrigger />
@@ -56,10 +60,12 @@ export function AppHeader() {
             }
           >
             <Radio className="size-3.5 text-success" strokeWidth={1.75} />
-            {connectedAccounts}/{accounts.length} connected
+            {connectedAccounts}/{totalAccounts} connected
           </TooltipTrigger>
           <TooltipContent side="bottom">Manage social accounts</TooltipContent>
         </Tooltip>
+
+        <DashboardModeSwitcher />
 
         <Button
           render={<Link href="/dashboard/create" prefetch={false} />}
