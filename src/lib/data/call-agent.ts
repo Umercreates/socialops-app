@@ -12,7 +12,7 @@ export const CALL_AGENT_CONFIG: CallAgentConfig = {
     "Do you have a rough budget or timeline in mind?",
     "Would you be open to a short call with our team this week?",
   ],
-  minimumLeadScore: 51,
+  minimumLeadScore: 70,
   mode: "manual",
   humanApproval: true,
   callingHoursStart: "10:00",

@@ -9,11 +9,12 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useDashboardViewMode } from "@/lib/dashboard-view-mode-context"
-import { CURRENT_WORKSPACE } from "@/lib/data/workspace"
 
-const TIMEZONES = ["Pacific Time (US)", "Mountain Time (US)", "Central Time (US)", "Eastern Time (US)", "UTC", "Central European Time"]
+const TIMEZONES = ["Pakistan Time", "Pacific Time (US)", "Mountain Time (US)", "Central Time (US)", "Eastern Time (US)", "UTC", "Central European Time"]
 const LANGUAGES = ["en", "es", "fr", "de", "pt"]
 const LANGUAGE_LABEL: Record<string, string> = { en: "English", es: "Spanish", fr: "French", de: "German", pt: "Portuguese" }
+const DEMO_BUSINESS_NAME = "EasyLife Technologies"
+const DEMO_TIMEZONE = "Pakistan Time"
 
 /** In Client Mode, real workspace-scoped business settings - persisted via
  * /api/workspace-settings (the workspaces.name column for business name,
@@ -23,8 +24,8 @@ const LANGUAGE_LABEL: Record<string, string> = { en: "English", es: "Spanish", f
  * business name. */
 export function GeneralSettings() {
   const { mode } = useDashboardViewMode()
-  const [businessName, setBusinessName] = React.useState(() => (mode === "demo" ? CURRENT_WORKSPACE.name : ""))
-  const [timezone, setTimezone] = React.useState(TIMEZONES[0])
+  const [businessName, setBusinessName] = React.useState(() => (mode === "demo" ? DEMO_BUSINESS_NAME : ""))
+  const [timezone, setTimezone] = React.useState(() => (mode === "demo" ? DEMO_TIMEZONE : TIMEZONES[0]))
   const [language, setLanguage] = React.useState(LANGUAGES[0])
   const [loading, setLoading] = React.useState(() => mode !== "demo")
   const [saving, setSaving] = React.useState(false)
@@ -39,8 +40,8 @@ export function GeneralSettings() {
   if (mode !== prevMode) {
     setPrevMode(mode)
     if (mode === "demo") {
-      setBusinessName(CURRENT_WORKSPACE.name)
-      setTimezone(TIMEZONES[0])
+      setBusinessName(DEMO_BUSINESS_NAME)
+      setTimezone(DEMO_TIMEZONE)
       setLanguage(LANGUAGES[0])
       setLoading(false)
     } else {
