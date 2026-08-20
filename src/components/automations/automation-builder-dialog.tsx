@@ -19,6 +19,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PlatformIcon, PLATFORM_LABEL } from "@/components/dashboard/platform-icon"
 import { TRIGGER_OPTIONS, CONDITION_OPTIONS, ACTION_OPTIONS, labelFor } from "@/lib/automation-options"
 import { DEFAULT_CREATE_MEETING_CONFIG, serializeCreateMeetingConfig, type CreateMeetingConfig } from "@/lib/automations/create-meeting-config"
+import { useDashboardViewMode } from "@/lib/dashboard-view-mode-context"
+import { generateAutomationId } from "@/lib/store/automations-store"
 import type {
   Automation,
   AutomationActionType,
@@ -35,6 +37,7 @@ interface AutomationBuilderDialogProps {
 }
 
 export function AutomationBuilderDialog({ onCreated }: AutomationBuilderDialogProps) {
+  const { mode } = useDashboardViewMode()
   const [open, setOpen] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -83,6 +86,44 @@ export function AutomationBuilderDialog({ onCreated }: AutomationBuilderDialogPr
         ? `: "${actionValue}"`
         : ""
 
+    const trigger = {
+      type: triggerType,
+      label: labelFor(TRIGGER_OPTIONS, triggerType) + (triggerValue ? `: "${triggerValue}"` : ""),
+      value: triggerValue || undefined,
+    }
+    const condition = {
+      type: conditionType,
+      label: labelFor(CONDITION_OPTIONS, conditionType) + (conditionValue ? `: "${conditionValue}"` : ""),
+      value: conditionValue || undefined,
+    }
+    const action = {
+      type: actionType,
+      label: labelFor(ACTION_OPTIONS, actionType) + actionLabelSuffix,
+      value: resolvedActionValue,
+    }
+    const rules = { runMode, workingHoursOnly, delayMinutes, maxAttempts, escalateAfterFailures }
+
+    // Demo Mode never reaches a real endpoint - the automation is built
+    // entirely client-side and only ever lands in the in-memory demo
+    // store, same as every other demo mutation.
+    if (mode === "demo") {
+      onCreated({
+        id: generateAutomationId(),
+        name: name.trim(),
+        status: "draft",
+        platform,
+        trigger,
+        condition,
+        action,
+        rules,
+        runsLast30d: 0,
+        lastRunAt: null,
+      })
+      reset()
+      setOpen(false)
+      return
+    }
+
     setSaving(true)
     setError(null)
     try {
@@ -90,26 +131,7 @@ export function AutomationBuilderDialog({ onCreated }: AutomationBuilderDialogPr
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({
-          name: name.trim(),
-          platform,
-          trigger: {
-            type: triggerType,
-            label: labelFor(TRIGGER_OPTIONS, triggerType) + (triggerValue ? `: "${triggerValue}"` : ""),
-            value: triggerValue || undefined,
-          },
-          condition: {
-            type: conditionType,
-            label: labelFor(CONDITION_OPTIONS, conditionType) + (conditionValue ? `: "${conditionValue}"` : ""),
-            value: conditionValue || undefined,
-          },
-          action: {
-            type: actionType,
-            label: labelFor(ACTION_OPTIONS, actionType) + actionLabelSuffix,
-            value: resolvedActionValue,
-          },
-          rules: { runMode, workingHoursOnly, delayMinutes, maxAttempts, escalateAfterFailures },
-        }),
+        body: JSON.stringify({ name: name.trim(), platform, trigger, condition, action, rules }),
       })
       const data = await res.json()
       if (!res.ok) {
