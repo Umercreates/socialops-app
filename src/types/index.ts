@@ -351,7 +351,9 @@ export interface AiChatMessage {
   source?: "gemini" | "simulated"
 }
 
-export type TeamRole = "admin" | "manager" | "content-creator" | "support-agent"
+/** Matches the real (platform/team.ts) TeamRole vocabulary exactly, so the
+ * demo store and the real Team API describe roles the same way. */
+export type TeamRole = "owner" | "admin" | "manager" | "sales"
 
 export interface TeamMember {
   id: string
@@ -449,7 +451,6 @@ export interface LeadQualification {
   preferredLanguage?: string
   preferredCallTime?: string
 }
-
 export interface Lead {
   id: string
   name: string
@@ -502,7 +503,6 @@ export interface LeadActivity {
   description: string
   timestamp: string
 }
-
 export interface LeadScoreFactors {
   buyingIntent: number
   budget: number

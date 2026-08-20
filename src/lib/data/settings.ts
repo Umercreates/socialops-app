@@ -1,10 +1,10 @@
 import type { Integration, TeamMember } from "@/types"
 
 export const TEAM_MEMBERS: TeamMember[] = [
-  { id: "team_1", name: "Maya Reyes", email: "maya@easylife.co", role: "admin", status: "active" },
-  { id: "team_2", name: "Priya Anand", email: "priya@easylife.co", role: "content-creator", status: "active" },
-  { id: "team_3", name: "Jordan Blake", email: "jordan@easylife.co", role: "manager", status: "active" },
-  { id: "team_4", name: "Sam Whitfield", email: "sam@easylife.co", role: "support-agent", status: "invited" },
+  { id: "team_1", name: "Ayesha Khan", email: "ayesha@easylife.pk", role: "owner", status: "active" },
+  { id: "team_2", name: "Ali Raza", email: "ali@easylife.pk", role: "admin", status: "active" },
+  { id: "team_3", name: "Mahnoor", email: "mahnoor@easylife.pk", role: "manager", status: "active" },
+  { id: "team_4", name: "Ahmed", email: "ahmed@easylife.pk", role: "sales", status: "active" },
 ]
 
 export const INTEGRATIONS: Integration[] = [

@@ -21,7 +21,6 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useTeamMembers } from "@/lib/store/settings-store"
 import { useDemoMode } from "@/lib/demo-mode-context"
-import type { TeamRole as DemoTeamRole } from "@/types"
 import type { TeamRole } from "@/lib/platform/team"
 
 const ROLE_LABEL: Record<TeamRole, string> = {
@@ -29,12 +28,6 @@ const ROLE_LABEL: Record<TeamRole, string> = {
   admin: "Admin",
   manager: "Manager",
   sales: "Sales",
-}
-const DEMO_ROLE_LABEL: Record<DemoTeamRole, string> = {
-  admin: "Admin",
-  manager: "Manager",
-  "content-creator": "Content Creator",
-  "support-agent": "Support Agent",
 }
 
 function initialsFor(name: string) {
@@ -294,7 +287,7 @@ export function TeamSettings() {
   const [open, setOpen] = React.useState(false)
   const [name, setName] = React.useState("")
   const [email, setEmail] = React.useState("")
-  const [role, setRoleValue] = React.useState<DemoTeamRole>("content-creator")
+  const [role, setRoleValue] = React.useState<TeamRole>("sales")
 
   if (!demoMode) return <RealTeamSettings />
 
@@ -304,7 +297,7 @@ export function TeamSettings() {
     inviteMember(name.trim(), email.trim(), role)
     setName("")
     setEmail("")
-    setRoleValue("content-creator")
+    setRoleValue("sales")
     setOpen(false)
   }
 
@@ -333,14 +326,14 @@ export function TeamSettings() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Role</Label>
-                <Select value={role} onValueChange={(v) => setRoleValue(v as DemoTeamRole)}>
+                <Select value={role} onValueChange={(v) => v && setRoleValue(v as TeamRole)}>
                   <SelectTrigger className="h-9 w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(Object.keys(DEMO_ROLE_LABEL) as DemoTeamRole[]).map((r) => (
+                    {(Object.keys(ROLE_LABEL) as TeamRole[]).map((r) => (
                       <SelectItem key={r} value={r}>
-                        {DEMO_ROLE_LABEL[r]}
+                        {ROLE_LABEL[r]}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -367,14 +360,14 @@ export function TeamSettings() {
               <span className="truncate text-xs text-muted-foreground">{member.email}</span>
             </div>
             {member.status === "invited" && <StatusBadge tone="warning">Invited</StatusBadge>}
-            <Select value={member.role} onValueChange={(v) => setRole(member.id, v as DemoTeamRole)}>
+            <Select value={member.role} onValueChange={(v) => v && setRole(member.id, v as TeamRole)}>
               <SelectTrigger size="sm" className="h-7 w-36">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(DEMO_ROLE_LABEL) as DemoTeamRole[]).map((r) => (
+                {(Object.keys(ROLE_LABEL) as TeamRole[]).map((r) => (
                   <SelectItem key={r} value={r}>
-                    {DEMO_ROLE_LABEL[r]}
+                    {ROLE_LABEL[r]}
                   </SelectItem>
                 ))}
               </SelectContent>
