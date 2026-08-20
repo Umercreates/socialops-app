@@ -20,12 +20,13 @@ import { listSocialAccounts } from "@/lib/platform/social-accounts"
 import { listPosts } from "@/lib/platform/posts"
 import { getBusinessAnalytics, getSetupProgress, getRecentActivity } from "@/lib/platform/business-analytics"
 import { PROVIDER_REGISTRY } from "@/lib/integrations/providers"
+import { getDashboardViewMode } from "@/lib/dashboard-view-mode"
 
 export const metadata: Metadata = { title: "Dashboard — EasyLife" }
 
 export default async function DashboardOverviewPage() {
-  const crmMode = process.env.CRM_MODE === "database" ? "database" : "demo"
-  if (crmMode === "database") return <RealDashboardOverview />
+  const viewMode = await getDashboardViewMode()
+  if (viewMode === "client") return <RealDashboardOverview />
 
   const [summary, activity, engagement] = await Promise.all([
     getDashboardSummary(),

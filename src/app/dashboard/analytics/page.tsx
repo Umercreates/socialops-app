@@ -6,12 +6,13 @@ import { requireAuth } from "@/lib/auth/guard"
 import { listSocialAccounts } from "@/lib/platform/social-accounts"
 import { listPosts } from "@/lib/platform/posts"
 import { getBusinessAnalytics, getMessagingAnalytics, getPlatformPublishPerformance } from "@/lib/platform/business-analytics"
+import { getDashboardViewMode } from "@/lib/dashboard-view-mode"
 
 export const metadata: Metadata = { title: "Analytics — EasyLife" }
 
 export default async function AnalyticsPage() {
-  const crmMode = process.env.CRM_MODE === "database" ? "database" : "demo"
-  if (crmMode === "database") return <RealAnalyticsPage />
+  const viewMode = await getDashboardViewMode()
+  if (viewMode === "client") return <RealAnalyticsPage />
 
   const overview = await getAnalyticsOverview()
   return <AnalyticsPageContent overview={overview} />

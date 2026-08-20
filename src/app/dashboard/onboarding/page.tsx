@@ -8,6 +8,7 @@ import { listPosts } from "@/lib/platform/posts"
 import { listWorkspaceMembers } from "@/lib/platform/team"
 import { getBusinessAnalytics, getSetupProgress } from "@/lib/platform/business-analytics"
 import { PROVIDER_REGISTRY } from "@/lib/integrations/providers"
+import { getDashboardViewMode } from "@/lib/dashboard-view-mode"
 import { cn } from "@/lib/utils"
 
 export const metadata: Metadata = { title: "Getting Started — EasyLife" }
@@ -21,15 +22,23 @@ interface OnboardingStep {
   icon: typeof Plug
 }
 
+/** Demo Mode should demonstrate what a fully set-up workspace looks like -
+ * every step already done, using the same demo dataset every other demo
+ * page draws from. Client Mode below stays based on real workspace state. */
+function DemoOnboarding() {
+  const steps: OnboardingStep[] = [
+    { title: "Connect a provider", description: "Link a social platform, WhatsApp, or your AI provider so EasyLife has something real to work with.", done: true, href: "/dashboard/integrations", cta: "Go to Integrations", icon: Plug },
+    { title: "Select an account to publish to", description: "Once a social provider is connected, choose which Page, profile, or channel EasyLife publishes to.", done: true, href: "/dashboard/accounts", cta: "View accounts", icon: Share2 },
+    { title: "Invite your team", description: "Bring in teammates with the right role so they can help manage content, leads, and calls.", done: true, href: "/dashboard/settings", cta: "Invite teammates", icon: Users },
+    { title: "Create your first post", description: "Draft or schedule a post to a connected account.", done: true, href: "/dashboard/create", cta: "Create a post", icon: PencilLine },
+    { title: "Capture your first lead", description: "Leads come in from WhatsApp, connected socials, or manual entry once things are connected.", done: true, href: "/dashboard/leads", cta: "View leads", icon: Contact },
+  ]
+  return <OnboardingChecklist steps={steps} subtitle="Demo workspace - every step is already set up. This is what a client's dashboard looks like once fully onboarded." />
+}
+
 export default async function OnboardingPage() {
-  const crmMode = process.env.CRM_MODE === "database" ? "database" : "demo"
-  if (crmMode !== "database") {
-    return (
-      <div className="flex flex-1 items-center justify-center px-4 py-16 text-center text-sm text-muted-foreground">
-        Getting Started is available once this workspace is running on the real database backend.
-      </div>
-    )
-  }
+  const viewMode = await getDashboardViewMode()
+  if (viewMode === "demo") return <DemoOnboarding />
 
   const auth = await requireAuth()
   if (!auth.ok) {
@@ -93,6 +102,10 @@ export default async function OnboardingPage() {
     },
   ]
 
+  return <OnboardingChecklist steps={steps} />
+}
+
+function OnboardingChecklist({ steps, subtitle }: { steps: OnboardingStep[]; subtitle?: string }) {
   const doneCount = steps.filter((s) => s.done).length
 
   return (
@@ -100,9 +113,11 @@ export default async function OnboardingPage() {
       <div className="flex flex-col gap-1">
         <h2 className="text-xl font-semibold tracking-tight text-foreground">Getting started</h2>
         <p className="text-sm text-muted-foreground">
-          {doneCount === steps.length
-            ? "You've completed every setup step - EasyLife is fully set up."
-            : `${doneCount}/${steps.length} steps complete. Finish these to get the most out of EasyLife.`}
+          {subtitle
+            ? subtitle
+            : doneCount === steps.length
+              ? "You've completed every setup step - EasyLife is fully set up."
+              : `${doneCount}/${steps.length} steps complete. Finish these to get the most out of EasyLife.`}
         </p>
       </div>
 
