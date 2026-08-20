@@ -16,7 +16,11 @@ import { PostPreview } from "@/components/composer/post-preview"
 import { ScheduleDialog } from "@/components/composer/schedule-dialog"
 import { PlatformIcon, PLATFORM_LABEL } from "@/components/dashboard/platform-icon"
 import { ALL_PLATFORMS, EMPTY_VARIANT, type ComposerVariantState } from "@/components/composer/composer-types"
-import type { PostMedia, PostVariant, SocialPlatform, SocialAccount } from "@/types"
+import { useDashboardViewMode } from "@/lib/dashboard-view-mode-context"
+import { useAuth } from "@/lib/auth/auth-context"
+import { useSocialAccounts } from "@/lib/store/accounts-store"
+import { usePosts, generatePostId } from "@/lib/store/posts-store"
+import type { Post, PostMedia, PostVariant, SocialPlatform, SocialAccount } from "@/types"
 
 type PublishFlow = "idle" | "saving-draft" | "scheduling" | "preparing" | "publishing" | "done"
 
@@ -45,13 +49,29 @@ function deriveTitle(baseCaption: string) {
 }
 
 export function Composer() {
-  const [accounts, setAccounts] = React.useState<SocialAccount[]>([])
+  const { mode } = useDashboardViewMode()
+  const { user } = useAuth()
+  const { accounts: demoAccounts } = useSocialAccounts()
+  const { addPost } = usePosts()
+  const [realAccounts, setRealAccounts] = React.useState<SocialAccount[]>([])
+
   React.useEffect(() => {
+    if (mode !== "client") return
+    let cancelled = false
     fetch("/api/social-accounts", { credentials: "same-origin" })
       .then((res) => res.json())
-      .then((data) => setAccounts(data.accounts ?? []))
-      .catch(() => setAccounts([]))
-  }, [])
+      .then((data) => {
+        if (!cancelled) setRealAccounts(data.accounts ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setRealAccounts([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [mode])
+
+  const accounts = mode === "demo" ? demoAccounts : realAccounts
   const connectedPlatforms = new Set(accounts.filter((a) => a.health !== "disconnected").map((a) => a.platform))
 
   const [baseCaption, setBaseCaption] = React.useState("")
@@ -118,6 +138,32 @@ export function Composer() {
   }
 
   async function submitPost(status: "draft" | "scheduled" | "publishing", scheduledFor?: string) {
+    // Demo Mode never reaches /api/posts - no draft/scheduled/publish_post
+    // job is ever created for a real workspace. The post only ever lands
+    // in the in-memory demo store, immediately resolved as "published"
+    // (a real async publish job doesn't exist here to wait on).
+    if (mode === "demo") {
+      const now = new Date().toISOString()
+      const resolvedStatus = status === "publishing" ? "published" : status
+      const post: Post = {
+        id: generatePostId(),
+        title: deriveTitle(baseCaption),
+        status: resolvedStatus,
+        baseCaption,
+        baseHashtags,
+        media,
+        platforms: selectedPlatforms,
+        variants: buildVariants(selectedPlatforms, variants),
+        scheduledFor,
+        publishedAt: resolvedStatus === "published" ? now : undefined,
+        createdAt: now,
+        updatedAt: now,
+        author: { id: user?.id ?? "demo_user", name: user?.name ?? "You" },
+      }
+      addPost(post)
+      return post
+    }
+
     const res = await fetch("/api/posts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

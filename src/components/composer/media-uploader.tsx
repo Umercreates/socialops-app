@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { ImagePlus, X as XIcon, Film, Loader2 } from "lucide-react"
+import { useDashboardViewMode } from "@/lib/dashboard-view-mode-context"
 import type { PostMedia } from "@/types"
 import { cn } from "@/lib/utils"
 
@@ -20,6 +21,7 @@ const MAX_FILES = 6
  * item and surfaces the server's reason rather than leaving a
  * never-publishable placeholder in the post. */
 export function MediaUploader({ media, onChange, onUploadingChange }: MediaUploaderProps) {
+  const { mode } = useDashboardViewMode()
   const inputRef = React.useRef<HTMLInputElement>(null)
   const [uploadingIds, setUploadingIds] = React.useState<Set<string>>(new Set())
   const [error, setError] = React.useState<string | null>(null)
@@ -33,6 +35,17 @@ export function MediaUploader({ media, onChange, onUploadingChange }: MediaUploa
   }, [uploadingIds, onUploadingChange])
 
   async function uploadOne(item: PostMedia, file: File) {
+    // Demo Mode never reaches /api/media - the local blob URL created for
+    // instant preview IS the final value, no real file/DB row is ever
+    // created for the workspace.
+    if (mode === "demo") {
+      setUploadingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(item.id)
+        return next
+      })
+      return
+    }
     try {
       const form = new FormData()
       form.append("file", file)
