@@ -20,6 +20,7 @@ import { useDashboardViewMode } from "@/lib/dashboard-view-mode-context"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useSocialAccounts } from "@/lib/store/accounts-store"
 import { usePosts, generatePostId } from "@/lib/store/posts-store"
+import { DEMO_DEFAULT_MEDIA } from "@/lib/composer/demo-default-media"
 import type { Post, PostMedia, PostVariant, SocialPlatform, SocialAccount } from "@/types"
 
 type PublishFlow = "idle" | "saving-draft" | "scheduling" | "preparing" | "publishing" | "done"
@@ -90,6 +91,11 @@ export function Composer() {
   const [resultLink, setResultLink] = React.useState<{ href: string; label: string } | null>(null)
 
   const selectedPlatforms = ALL_PLATFORMS.filter((p) => selected.has(p))
+
+  // Demo Mode only, and only until the user picks their own demo media -
+  // never written into `media` itself, so it's never part of what
+  // submitPost() saves and can never be mistaken for a real upload.
+  const previewMedia = media.length === 0 && mode === "demo" ? [DEMO_DEFAULT_MEDIA] : media
 
   function togglePlatform(platform: SocialPlatform) {
     setSelected((prev) => {
@@ -378,7 +384,7 @@ export function Composer() {
               <PostPreview
                 platform={selectedPlatforms.includes(previewPlatform) ? previewPlatform : selectedPlatforms[0]}
                 variant={variants[selectedPlatforms.includes(previewPlatform) ? previewPlatform : selectedPlatforms[0]]}
-                media={media}
+                media={previewMedia}
               />
             </>
           )}

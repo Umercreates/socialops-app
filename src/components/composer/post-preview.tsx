@@ -13,8 +13,17 @@ import {
   Play,
 } from "lucide-react"
 import { CURRENT_WORKSPACE } from "@/lib/data/workspace"
+import { DEMO_DEFAULT_MEDIA_ID } from "@/lib/composer/demo-default-media"
 import type { ComposerVariantState } from "@/components/composer/composer-types"
 import type { PostMedia, SocialPlatform } from "@/types"
+
+/** The bundled Demo Mode default image is a full graphic (logo + headline
+ * text), so it always renders with object-contain (letterboxed, never
+ * cropped) regardless of the preview's aspect ratio - real uploaded media
+ * (demo or client) keeps the existing object-cover fill behavior. */
+function mediaObjectFit(item: PostMedia) {
+  return item.id === DEMO_DEFAULT_MEDIA_ID ? "object-contain" : "object-cover"
+}
 
 function MediaFrame({ media, aspect }: { media: PostMedia[]; aspect: string }) {
   const primary = media[0]
@@ -22,10 +31,10 @@ function MediaFrame({ media, aspect }: { media: PostMedia[]; aspect: string }) {
     <div className={`relative w-full overflow-hidden bg-muted ${aspect}`}>
       {primary ? (
         primary.type === "video" ? (
-          <video src={primary.url} className="size-full object-cover" muted />
+          <video src={primary.url} className={`size-full ${mediaObjectFit(primary)}`} muted />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={primary.url} alt="" className="size-full object-cover" />
+          <img src={primary.url} alt="" className={`size-full ${mediaObjectFit(primary)}`} />
         )
       ) : (
         <div className="flex size-full items-center justify-center bg-gradient-to-br from-muted to-muted/50 text-xs text-muted-foreground">
@@ -157,10 +166,10 @@ export function PostPreview({ platform, variant, media }: PostPreviewProps) {
         <div className="relative mx-auto aspect-[9/16] w-full max-w-52 overflow-hidden rounded-xl bg-black ring-1 ring-foreground/10">
           {media[0] ? (
             media[0].type === "video" ? (
-              <video src={media[0].url} className="size-full object-cover" muted />
+              <video src={media[0].url} className={`size-full ${mediaObjectFit(media[0])}`} muted />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={media[0].url} alt="" className="size-full object-cover" />
+              <img src={media[0].url} alt="" className={`size-full ${mediaObjectFit(media[0])}`} />
             )
           ) : (
             <div className="flex size-full items-center justify-center bg-gradient-to-b from-zinc-800 to-black text-xs text-white/50">
