@@ -346,9 +346,10 @@ export interface AiChatMessage {
   role: "user" | "assistant"
   content: string
   createdAt: string
-  /** Only set on assistant messages — whether this reply came from the real
-   * Gemini API or the local template fallback (e.g. Gemini unreachable). */
-  source?: "gemini" | "simulated"
+  /** Only set on assistant messages - "gemini" for a genuine AI reply,
+   * "error" for the honest unavailable-message bubble shown when Gemini
+   * couldn't be reached (never presented as if it were a real answer). */
+  source?: "gemini" | "error"
 }
 
 /** Matches the real (platform/team.ts) TeamRole vocabulary exactly, so the

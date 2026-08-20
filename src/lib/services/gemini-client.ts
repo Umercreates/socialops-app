@@ -17,7 +17,12 @@ const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODE
 
 export type GeminiResult = { ok: true; text: string } | { ok: false; reason: string }
 
-export async function generateWithGemini(prompt: string, systemInstruction: string | undefined, apiKey: string | null): Promise<GeminiResult> {
+export interface GeminiChatTurn {
+  role: "user" | "model"
+  text: string
+}
+
+async function callGemini(contents: { role: "user" | "model"; parts: { text: string }[] }[], systemInstruction: string | undefined, apiKey: string | null): Promise<GeminiResult> {
   if (!apiKey) return { ok: false, reason: "Gemini is not configured for this workspace." }
 
   try {
@@ -26,7 +31,7 @@ export async function generateWithGemini(prompt: string, systemInstruction: stri
       headers: { "Content-Type": "application/json" },
       signal: AbortSignal.timeout(15000),
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        contents,
         ...(systemInstruction ? { systemInstruction: { parts: [{ text: systemInstruction }] } } : {}),
         generationConfig: { temperature: 0.8, maxOutputTokens: 512 },
       }),
@@ -45,4 +50,20 @@ export async function generateWithGemini(prompt: string, systemInstruction: stri
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : "Unknown Gemini request error" }
   }
+}
+
+export async function generateWithGemini(prompt: string, systemInstruction: string | undefined, apiKey: string | null): Promise<GeminiResult> {
+  return callGemini([{ role: "user", parts: [{ text: prompt }] }], systemInstruction, apiKey)
+}
+
+/** Multi-turn variant for a genuine chat experience - `turns` is the
+ * caller's already-bounded conversation history (oldest first, ending
+ * with the newest user message), mapped directly to Gemini's `contents`
+ * shape. Same never-throws contract as generateWithGemini. */
+export async function generateChatWithGemini(turns: GeminiChatTurn[], systemInstruction: string | undefined, apiKey: string | null): Promise<GeminiResult> {
+  return callGemini(
+    turns.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
+    systemInstruction,
+    apiKey
+  )
 }
