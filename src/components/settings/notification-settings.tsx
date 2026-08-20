@@ -4,6 +4,7 @@ import * as React from "react"
 import { MessageCircle, MessageSquare, CircleX, TriangleAlert, Workflow } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
+import { useDashboardViewMode } from "@/lib/dashboard-view-mode-context"
 import type { LucideIcon } from "lucide-react"
 
 interface NotificationRow {
@@ -24,14 +25,32 @@ const ROWS: NotificationRow[] = [
 
 const DEFAULTS: Record<string, boolean> = Object.fromEntries(ROWS.map((r) => [r.key, r.defaultChecked]))
 
-/** Real, workspace-scoped preferences - persisted in
- * workspace_settings.notification_preferences via /api/workspace-settings,
- * not local-only state that reset on reload. */
+/** In Client Mode, real workspace-scoped preferences - persisted in
+ * workspace_settings.notification_preferences via /api/workspace-settings.
+ * In Demo Mode, toggles flip local-only state and are never sent to the
+ * real workspace row, so a demo click can't change the client's own
+ * notification preferences. */
 export function NotificationSettings() {
+  const { mode } = useDashboardViewMode()
   const [state, setState] = React.useState<Record<string, boolean>>(DEFAULTS)
-  const [loading, setLoading] = React.useState(true)
+  const [loading, setLoading] = React.useState(() => mode !== "demo")
+
+  // Render-time adjustment (not an effect) for a mode switch after mount -
+  // demo always resets to the un-persisted defaults.
+  const [prevMode, setPrevMode] = React.useState(mode)
+  if (mode !== prevMode) {
+    setPrevMode(mode)
+    if (mode === "demo") {
+      setState(DEFAULTS)
+      setLoading(false)
+    } else {
+      setLoading(true)
+    }
+  }
 
   React.useEffect(() => {
+    if (mode !== "client") return
+
     let cancelled = false
 
     async function load() {
@@ -49,11 +68,14 @@ export function NotificationSettings() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [mode])
 
   async function handleToggle(key: string, checked: boolean) {
     const next = { ...state, [key]: checked }
     setState(next)
+
+    if (mode === "demo") return
+
     await fetch("/api/workspace-settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

@@ -50,6 +50,22 @@ export function NotificationPanel() {
   const [loaded, setLoaded] = React.useState(demoMode)
   const unreadCount = notifications.filter((n) => !n.read).length
 
+  // Render-time adjustment (not the effect below) for a demoMode change
+  // after mount - e.g. switching Client -> Demo mid-session must swap the
+  // real feed out for the static demo one immediately, not leave stale
+  // real notifications on screen until the next real fetch would have run.
+  const [prevDemoMode, setPrevDemoMode] = React.useState(demoMode)
+  if (demoMode !== prevDemoMode) {
+    setPrevDemoMode(demoMode)
+    if (demoMode) {
+      setNotifications(NOTIFICATIONS)
+      setLoaded(true)
+    } else {
+      setNotifications([])
+      setLoaded(false)
+    }
+  }
+
   React.useEffect(() => {
     if (demoMode) return
     let cancelled = false
@@ -74,6 +90,9 @@ export function NotificationPanel() {
   async function markAllRead() {
     const unread = notifications.filter((n) => !n.read)
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    // Demo notifications are never sent to the real API - a demo-mode click
+    // must not mark a real notification read.
+    if (demoMode) return
     await Promise.all(
       unread.map((n) => fetch(`/api/notifications/${n.id}`, { method: "PATCH", credentials: "same-origin" }).catch(() => null))
     )
@@ -81,6 +100,7 @@ export function NotificationPanel() {
 
   async function markRead(id: string) {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+    if (demoMode) return
     await fetch(`/api/notifications/${id}`, { method: "PATCH", credentials: "same-origin" }).catch(() => null)
   }
 

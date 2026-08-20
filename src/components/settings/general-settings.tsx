@@ -8,25 +8,49 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useDashboardViewMode } from "@/lib/dashboard-view-mode-context"
+import { CURRENT_WORKSPACE } from "@/lib/data/workspace"
 
 const TIMEZONES = ["Pacific Time (US)", "Mountain Time (US)", "Central Time (US)", "Eastern Time (US)", "UTC", "Central European Time"]
 const LANGUAGES = ["en", "es", "fr", "de", "pt"]
 const LANGUAGE_LABEL: Record<string, string> = { en: "English", es: "Spanish", fr: "French", de: "German", pt: "Portuguese" }
 
-/** Real, workspace-scoped business settings - persisted via
+/** In Client Mode, real workspace-scoped business settings - persisted via
  * /api/workspace-settings (the workspaces.name column for business name,
- * workspace_settings for the rest), not local-only state that reset on
- * reload. */
+ * workspace_settings for the rest). In Demo Mode, a realistic pre-filled
+ * example that saves only to local state - never touches the real
+ * workspace row, so a demo click can't overwrite the client's own
+ * business name. */
 export function GeneralSettings() {
-  const [businessName, setBusinessName] = React.useState("")
+  const { mode } = useDashboardViewMode()
+  const [businessName, setBusinessName] = React.useState(() => (mode === "demo" ? CURRENT_WORKSPACE.name : ""))
   const [timezone, setTimezone] = React.useState(TIMEZONES[0])
   const [language, setLanguage] = React.useState(LANGUAGES[0])
-  const [loading, setLoading] = React.useState(true)
+  const [loading, setLoading] = React.useState(() => mode !== "demo")
   const [saving, setSaving] = React.useState(false)
   const [saved, setSaved] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
+  // Mode-switch (not just first mount) needs to reset these fields too - the
+  // render-time "adjust state from a changed prop" pattern, so it isn't
+  // itself a setState-in-effect. The client-mode fetch below still owns
+  // async loading via its own effect.
+  const [prevMode, setPrevMode] = React.useState(mode)
+  if (mode !== prevMode) {
+    setPrevMode(mode)
+    if (mode === "demo") {
+      setBusinessName(CURRENT_WORKSPACE.name)
+      setTimezone(TIMEZONES[0])
+      setLanguage(LANGUAGES[0])
+      setLoading(false)
+    } else {
+      setLoading(true)
+    }
+  }
+
   React.useEffect(() => {
+    if (mode !== "client") return
+
     let cancelled = false
 
     async function load() {
@@ -47,13 +71,22 @@ export function GeneralSettings() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [mode])
 
   async function handleSave(event: React.FormEvent) {
     event.preventDefault()
     setSaving(true)
     setError(null)
     setSaved(false)
+
+    if (mode === "demo") {
+      // Demo save is local-only, never persisted or sent anywhere.
+      setSaving(false)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+      return
+    }
+
     try {
       const res = await fetch("/api/workspace-settings", {
         method: "PATCH",
