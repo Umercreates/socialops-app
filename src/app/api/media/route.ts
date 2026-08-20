@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@/lib/auth/guard"
 import { verifySameOrigin } from "@/lib/auth/csrf"
+import { requireClientMode } from "@/lib/auth/dashboard-mode-guard"
 import { validateUpload, MAX_UPLOAD_BYTES } from "@/lib/storage/media-validation"
 import { getStorageAdapter } from "@/lib/storage/local-adapter"
 import { createMediaAsset } from "@/lib/platform/media"
@@ -18,6 +19,8 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.response
     const roleCheck = requireRole(auth.ctx, ["owner", "admin", "manager"])
     if (roleCheck) return roleCheck
+    const modeCheck = await requireClientMode()
+    if (modeCheck) return modeCheck
 
     // Rejects an oversized request from its Content-Length header before
     // request.formData() ever buffers the body into memory - on a 1GB host,
