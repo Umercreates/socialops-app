@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import type { Call, GoogleSheetSync, Lead, Meeting } from "@/types"
-import { simulateSyncLeadToSheet, simulateTestConnection, type LeadSheetRow } from "@/lib/integrations/sheets"
+import { simulateSyncLeadToSheet, simulateTestConnection, buildLeadSheetRow, type LeadSheetRow } from "@/lib/integrations/sheets"
+import { LEADS } from "@/lib/data/leads"
 import { nowIso } from "@/lib/data/constants"
 import { useDemoMode } from "@/lib/demo-mode-context"
 import { useProviderStatus } from "@/lib/hooks/use-provider-status"
@@ -20,8 +21,18 @@ interface SheetsContextValue {
 
 const SheetsContext = React.createContext<SheetsContextValue | null>(null)
 
+/** A few of the demo workspace's core leads already appear "synced" so the
+ * Sheets preview looks like an active, populated CRM sheet immediately -
+ * not an empty table someone has to trigger a sync to see anything in. */
+const INITIAL_SYNC_LEAD_NAMES = ["Ahmed Khan", "Sara Malik", "Usman Developers", "Nova Properties"]
+const INITIAL_SYNC_RECORDS: SyncRecord[] = LEADS.filter((lead) => INITIAL_SYNC_LEAD_NAMES.includes(lead.name)).map((lead) => ({
+  leadId: lead.id,
+  syncedAt: lead.updatedAt,
+  row: buildLeadSheetRow(lead),
+}))
+
 export function SheetsProvider({ children }: { children: React.ReactNode }) {
-  const [records, setRecords] = React.useState<SyncRecord[]>([])
+  const [records, setRecords] = React.useState<SyncRecord[]>(INITIAL_SYNC_RECORDS)
   const value = React.useMemo(() => ({ records, setRecords }), [records])
   return <SheetsContext.Provider value={value}>{children}</SheetsContext.Provider>
 }

@@ -120,16 +120,34 @@ export function SheetsSettings() {
           <CardHeader className="px-0">
             <CardTitle className="text-[15px]">Recent syncs (simulated)</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col divide-y divide-border px-0">
-            {records
-              .slice(-5)
-              .reverse()
-              .map((record) => (
-                <div key={`${record.leadId}-${record.syncedAt}`} className="flex items-center justify-between py-2 text-xs">
-                  <span className="text-foreground">{record.row.Name || "Unnamed lead"}</span>
-                  <span className="text-muted-foreground">{formatRelativeTime(record.syncedAt, MOCK_NOW)}</span>
-                </div>
-              ))}
+          <CardContent className="overflow-x-auto px-0">
+            <table className="w-full min-w-[32rem] text-xs">
+              <thead>
+                <tr className="text-left text-muted-foreground">
+                  <th className="pb-2 pr-3 font-medium">Name</th>
+                  <th className="pb-2 pr-3 font-medium">Phone</th>
+                  <th className="pb-2 pr-3 font-medium">Source</th>
+                  <th className="pb-2 pr-3 font-medium">Lead Score</th>
+                  <th className="pb-2 pr-3 font-medium">Status</th>
+                  <th className="pb-2 font-medium">Synced</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {records
+                  .slice(-8)
+                  .reverse()
+                  .map((record) => (
+                    <tr key={`${record.leadId}-${record.syncedAt}`}>
+                      <td className="py-2 pr-3 text-foreground">{record.row.Name || "Unnamed lead"}</td>
+                      <td className="py-2 pr-3 text-muted-foreground">{record.row["WhatsApp Number"] || "—"}</td>
+                      <td className="py-2 pr-3 text-muted-foreground capitalize">{record.row["Source Platform"] || "—"}</td>
+                      <td className="py-2 pr-3 text-foreground">{record.row["Lead Score"]}</td>
+                      <td className="py-2 pr-3 text-muted-foreground capitalize">{record.row["Lead Status"]}</td>
+                      <td className="py-2 text-muted-foreground">{formatRelativeTime(record.syncedAt, MOCK_NOW)}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
           </CardContent>
         </Card>
       )}
