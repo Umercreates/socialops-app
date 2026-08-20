@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireAuth, requireRole } from "@/lib/auth/guard"
 import { verifySameOrigin } from "@/lib/auth/csrf"
+import { requireClientMode } from "@/lib/auth/dashboard-mode-guard"
 import { bookMeeting } from "@/lib/integrations/google-calendar/booking"
 import { listMeetings } from "@/lib/platform/meetings"
 import { apiError } from "@/lib/api/errors"
@@ -42,6 +43,8 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.response
     const roleCheck = requireRole(auth.ctx, ["owner", "admin", "manager"])
     if (roleCheck) return roleCheck
+    const modeCheck = await requireClientMode()
+    if (modeCheck) return modeCheck
 
     const body = createSchema.parse(await request.json())
     if (new Date(body.endTime) <= new Date(body.startTime)) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireAuth, requireRole } from "@/lib/auth/guard"
 import { verifySameOrigin } from "@/lib/auth/csrf"
+import { requireClientMode } from "@/lib/auth/dashboard-mode-guard"
 import { getLead } from "@/lib/leads/repository"
 import { listCalls, queueCall, recordBlockedCall } from "@/lib/platform/calls"
 import { resolveActiveConnection } from "@/lib/integrations/credential-resolution"
@@ -39,6 +40,8 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.response
     const roleCheck = requireRole(auth.ctx, ["owner", "admin", "manager", "sales"])
     if (roleCheck) return roleCheck
+    const modeCheck = await requireClientMode()
+    if (modeCheck) return modeCheck
 
     const body = createSchema.parse(await request.json())
     const lead = await getLead(auth.ctx.workspaceId, body.leadId)

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireAuth, requireRole } from "@/lib/auth/guard"
 import { verifySameOrigin } from "@/lib/auth/csrf"
+import { requireClientMode } from "@/lib/auth/dashboard-mode-guard"
 import { isProviderId, PROVIDER_REGISTRY } from "@/lib/integrations/providers"
 import { getProviderView, saveConnection, disableConnection, removeConnection } from "@/lib/integrations/service"
 import { evaluateProviderReadiness } from "@/lib/integrations/readiness"
@@ -41,6 +42,8 @@ export async function PUT(request: Request, ctx: { params: Promise<{ provider: s
     if (!auth.ok) return auth.response
     const roleCheck = requireRole(auth.ctx, ["owner", "admin"])
     if (roleCheck) return roleCheck
+    const modeCheck = await requireClientMode()
+    if (modeCheck) return modeCheck
 
     const { provider } = await ctx.params
     if (!isProviderId(provider)) {
@@ -113,6 +116,8 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ provider
     if (!auth.ok) return auth.response
     const roleCheck = requireRole(auth.ctx, ["owner", "admin"])
     if (roleCheck) return roleCheck
+    const modeCheck = await requireClientMode()
+    if (modeCheck) return modeCheck
 
     const { provider } = await ctx.params
     if (!isProviderId(provider)) {

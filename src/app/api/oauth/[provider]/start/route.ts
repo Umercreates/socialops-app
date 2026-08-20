@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@/lib/auth/guard"
+import { requireClientMode } from "@/lib/auth/dashboard-mode-guard"
 import { isProviderId, PROVIDER_REGISTRY } from "@/lib/integrations/providers"
 import { getConnection } from "@/lib/integrations/repository"
 import { resolveCredentialValue } from "@/lib/integrations/service"
@@ -21,6 +22,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ provider: s
     if (!auth.ok) return auth.response
     const roleCheck = requireRole(auth.ctx, ["owner", "admin"])
     if (roleCheck) return roleCheck
+    const modeCheck = await requireClientMode()
+    if (modeCheck) return modeCheck
 
     const { provider } = await ctx.params
     if (!isProviderId(provider)) {

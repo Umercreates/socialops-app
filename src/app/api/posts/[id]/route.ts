@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireAuth, requireRole } from "@/lib/auth/guard"
 import { verifySameOrigin } from "@/lib/auth/csrf"
+import { requireClientMode } from "@/lib/auth/dashboard-mode-guard"
 import { getPost, updatePost, deletePost, listPostTargets, createPostTargets } from "@/lib/platform/posts"
 import { getSocialAccountsByIds } from "@/lib/platform/social-accounts"
 import { enqueueJob } from "@/lib/jobs/queue"
@@ -60,6 +61,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     if (!auth.ok) return auth.response
     const roleCheck = requireRole(auth.ctx, ["owner", "admin", "manager"])
     if (roleCheck) return roleCheck
+    const modeCheck = await requireClientMode()
+    if (modeCheck) return modeCheck
 
     const { id } = await ctx.params
     const body = patchSchema.parse(await request.json())

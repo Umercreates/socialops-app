@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@/lib/auth/guard"
 import { verifySameOrigin } from "@/lib/auth/csrf"
+import { requireClientMode } from "@/lib/auth/dashboard-mode-guard"
 import { isProviderId } from "@/lib/integrations/providers"
 import { recordConnectionTest, getProviderView } from "@/lib/integrations/service"
 import { testProviderConnection } from "@/lib/integrations/test-connection"
@@ -17,6 +18,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ provider: 
     if (!auth.ok) return auth.response
     const roleCheck = requireRole(auth.ctx, ["owner", "admin"])
     if (roleCheck) return roleCheck
+    const modeCheck = await requireClientMode()
+    if (modeCheck) return modeCheck
 
     const { provider } = await ctx.params
     if (!isProviderId(provider)) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireAuth, requireRole } from "@/lib/auth/guard"
 import { verifySameOrigin } from "@/lib/auth/csrf"
+import { requireClientMode } from "@/lib/auth/dashboard-mode-guard"
 import { getCommentRow, updateCommentStatus, recordCommentReply } from "@/lib/platform/comments"
 import { resolveActiveConnection } from "@/lib/integrations/credential-resolution"
 import { resolveCredentialValue } from "@/lib/integrations/service"
@@ -24,6 +25,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (!auth.ok) return auth.response
     const roleCheck = requireRole(auth.ctx, ["owner", "admin", "manager", "sales"])
     if (roleCheck) return roleCheck
+    const modeCheck = await requireClientMode()
+    if (modeCheck) return modeCheck
 
     const { id } = await ctx.params
     const comment = await getCommentRow(auth.ctx.workspaceId, id)
