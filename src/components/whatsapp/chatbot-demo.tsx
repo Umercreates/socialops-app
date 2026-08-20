@@ -28,8 +28,8 @@ interface ChatMessage {
   text: string
 }
 
-const GREETING = "Hi! Thanks for reaching out to EasyLife 👋 What can we help you with — website, app, marketing, branding, or something else?"
-const QUICK_REPLIES = ["I need a website", "Looking for digital marketing help", "Just checking prices"]
+const GREETING = "Assalam-o-Alaikum! Thanks for reaching out to EasyLife 👋 Are you mainly looking for lead generation, WhatsApp automation, CRM automation, or a complete sales system?"
+const QUICK_REPLIES = ["Complete sales system", "Just WhatsApp automation", "Checking pricing"]
 
 function initialMessages(): ChatMessage[] {
   return [{ id: "m0", sender: "bot", text: GREETING }]
