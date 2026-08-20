@@ -16,7 +16,7 @@ export const ACTIVITY_FEED: ActivityItem[] = [
     status: "info",
     platform: "facebook",
     title: "New Facebook message",
-    description: "Priya Malhotra asked about booking a studio session.",
+    description: "Usman Developers asked whether the system handles 1,000+ leads/month.",
     timestamp: "2026-08-09T12:58:00Z",
   },
   {
@@ -25,7 +25,7 @@ export const ACTIVITY_FEED: ActivityItem[] = [
     status: "info",
     platform: "instagram",
     title: "New comment on your post",
-    description: "@wildandwoven: “This lighting is unreal, what setup is this?”",
+    description: "@hira.boutique: “Do you offer this for ecommerce businesses?”",
     timestamp: "2026-08-09T11:20:00Z",
   },
   {
@@ -69,7 +69,7 @@ export const ACTIVITY_FEED: ActivityItem[] = [
     status: "info",
     platform: "instagram",
     title: "New Instagram DM",
-    description: "@trailrunco sent a message about a collab.",
+    description: "@sm.digital sent a message about WhatsApp + CRM automation.",
     timestamp: "2026-08-08T15:03:00Z",
   },
 ]
