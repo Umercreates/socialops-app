@@ -35,8 +35,10 @@ export interface BookMeetingResult {
   meetingLink: string
 }
 
-/** Simulated — a real integration calls calendar.events.insert. */
+/** Simulated — a real integration calls calendar.events.insert. Uses a
+ * deliberately fake URI scheme (never meet.google.com) so a demo meeting
+ * link can never be mistaken for a real, clickable Google Meet room. */
 export async function simulateBookMeeting(): Promise<BookMeetingResult> {
   await new Promise((resolve) => setTimeout(resolve, 600))
-  return { ok: true, meetingLink: `https://meet.google.com/demo-${Math.random().toString(36).slice(2, 8)}` }
+  return { ok: true, meetingLink: `demo://meeting/${Math.random().toString(36).slice(2, 8)}` }
 }
