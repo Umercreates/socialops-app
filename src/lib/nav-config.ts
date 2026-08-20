@@ -29,7 +29,7 @@ export interface NavItem {
 
 export const PRIMARY_NAV: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { title: "Getting Started", href: "/dashboard/onboarding", icon: ListChecks },
+  { title: "Workspace Setup", href: "/dashboard/onboarding", icon: ListChecks },
   { title: "Create Post", href: "/dashboard/create", icon: PencilLine },
   { title: "Content Calendar", href: "/dashboard/calendar", icon: CalendarDays },
   { title: "Scheduled Posts", href: "/dashboard/scheduled", icon: Clock },

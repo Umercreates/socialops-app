@@ -11,7 +11,7 @@ import { PROVIDER_REGISTRY } from "@/lib/integrations/providers"
 import { getDashboardViewMode } from "@/lib/dashboard-view-mode"
 import { cn } from "@/lib/utils"
 
-export const metadata: Metadata = { title: "Getting Started — EasyLife" }
+export const metadata: Metadata = { title: "Workspace Setup — EasyLife" }
 
 interface OnboardingStep {
   title: string
@@ -111,7 +111,7 @@ function OnboardingChecklist({ steps, subtitle }: { steps: OnboardingStep[]; sub
   return (
     <div className="flex flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 animate-in fade-in-0 slide-in-from-bottom-2 duration-500 ease-out">
       <div className="flex flex-col gap-1">
-        <h2 className="text-xl font-semibold tracking-tight text-foreground">Getting started</h2>
+        <h2 className="text-xl font-semibold tracking-tight text-foreground">Workspace Setup</h2>
         <p className="text-sm text-muted-foreground">
           {subtitle
             ? subtitle
