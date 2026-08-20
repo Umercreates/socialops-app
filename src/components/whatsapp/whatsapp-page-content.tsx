@@ -12,8 +12,10 @@ import { AnimatedNumber } from "@/components/dashboard/animated-number"
 import { LEAD_STAGE_ORDER } from "@/lib/lead-status"
 import { formatCompactNumber } from "@/lib/format"
 import { useLeads } from "@/lib/store/leads-store"
+import { useDashboardViewMode } from "@/lib/dashboard-view-mode-context"
 
 export function WhatsAppPageContent() {
+  const { mode } = useDashboardViewMode()
   const { leads } = useLeads()
   const whatsappLeads = leads.filter((l) => l.whatsappNumber)
   const qualifiedIndex = LEAD_STAGE_ORDER.indexOf("qualified")
@@ -52,35 +54,51 @@ export function WhatsAppPageContent() {
         </div>
       </div>
 
-      <Tabs defaultValue="connection">
-        <TabsList className="max-w-full overflow-x-auto">
-          <TabsTrigger value="connection">Connection</TabsTrigger>
-          <TabsTrigger value="live">Live Conversations</TabsTrigger>
-          <TabsTrigger value="qr">QR & Link</TabsTrigger>
-          <TabsTrigger value="chatbot">Chatbot Demo</TabsTrigger>
-          <TabsTrigger value="inbox">Lead Inbox</TabsTrigger>
-        </TabsList>
+      {/* Real and demo tabs are never mixed on screen at once - Client Mode
+          shows only the real connection/conversation tabs, Demo Mode shows
+          only the demo-oriented ones, matching whichever the header
+          switcher is currently set to. */}
+      {mode === "client" ? (
+        <Tabs defaultValue="connection">
+          <TabsList className="max-w-full overflow-x-auto">
+            <TabsTrigger value="connection">Connection</TabsTrigger>
+            <TabsTrigger value="live">Live Conversations</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="connection" className="pt-4">
-          <ConnectionCard />
-        </TabsContent>
+          <TabsContent value="connection" className="pt-4">
+            <ConnectionCard />
+          </TabsContent>
 
-        <TabsContent value="live" className="pt-4">
-          <LiveConversationsList />
-        </TabsContent>
+          <TabsContent value="live" className="pt-4">
+            <LiveConversationsList />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <Tabs defaultValue="connection">
+          <TabsList className="max-w-full overflow-x-auto">
+            <TabsTrigger value="connection">Connection</TabsTrigger>
+            <TabsTrigger value="qr">QR & Link</TabsTrigger>
+            <TabsTrigger value="chatbot">Chatbot Demo</TabsTrigger>
+            <TabsTrigger value="inbox">Lead Inbox</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="qr" className="pt-4">
-          <QrLinkCard />
-        </TabsContent>
+          <TabsContent value="connection" className="pt-4">
+            <ConnectionCard />
+          </TabsContent>
 
-        <TabsContent value="chatbot" className="pt-4">
-          <ChatbotDemo />
-        </TabsContent>
+          <TabsContent value="qr" className="pt-4">
+            <QrLinkCard />
+          </TabsContent>
 
-        <TabsContent value="inbox" className="pt-4">
-          <LeadInboxList />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="chatbot" className="pt-4">
+            <ChatbotDemo />
+          </TabsContent>
+
+          <TabsContent value="inbox" className="pt-4">
+            <LeadInboxList />
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   )
 }
