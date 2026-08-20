@@ -5,12 +5,14 @@ import { Bot, Send, Loader2, Sparkles, Info, Cpu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { AI_CAPABILITIES } from "@/components/ai/ai-capabilities"
+import { useDashboardViewMode } from "@/lib/dashboard-view-mode-context"
 import type { AiCapability, AiChatMessage } from "@/types"
 import { cn } from "@/lib/utils"
 
 /** Calls the server route, which tries real Gemini first and only falls
  * back to the local template if Gemini is unavailable — the route always
- * resolves, it never throws, so the UI never has to render an error state. */
+ * resolves, it never throws, so the UI never has to render an error state.
+ * Client Mode only — Demo Mode never reaches this (see getDemoAiResponse). */
 async function getAiResponse(capability: AiCapability, input: string): Promise<{ text: string; source: "gemini" | "simulated" }> {
   try {
     const res = await fetch("/api/ai/assistant", {
@@ -25,6 +27,30 @@ async function getAiResponse(capability: AiCapability, input: string): Promise<{
   }
 }
 
+/** Demo Mode's AI Assistant must not require GEMINI_API_KEY or call Gemini
+ * at all - a fixed, deterministic response per capability, same shape as a
+ * real answer would take so the showcase still feels real. No network
+ * request; never labelled as if it came from Gemini. */
+const DEMO_RESPONSES: Record<AiCapability, string> = {
+  caption: "Your leads shouldn't wait for business hours. 🚀 EasyLife's AI qualifies, scores, and books meetings with your best-fit customers — 24/7, on WhatsApp, Instagram, and Facebook. Ready to see it in action?",
+  rewrite: "We're excited to share our new services! → Big news: we just launched something you're going to want to see.",
+  hashtags: "#AISalesAutomation #WhatsAppMarketing #LeadGeneration #EasyLifeAI #SalesOS #DigitalMarketingPakistan #SmartCRM",
+  ideas: "1) A before/after of a lead's WhatsApp journey from first message to booked meeting. 2) A 30-second demo of the AI qualifying a lead live. 3) A client testimonial on response-time improvements. 4) A carousel breaking down your sales pipeline stages.",
+  "dm-reply": "Thanks for reaching out! EasyLife automates your lead qualification and follow-up across WhatsApp, Instagram, and Facebook — happy to walk you through pricing on a quick call. What's the best time for you this week?",
+  "comment-reply": "Thank you! 🙏 We'd love to show you how it works — send us a DM and we'll get you set up with a quick walkthrough.",
+  intent: "This looks like a high-intent buying question — recommend routing to the qualified-lead follow-up flow and flagging for a sales call.",
+  repurpose: "Turn this into: a LinkedIn case-study post, a 3-slide Instagram carousel, a 45-second Reel script, and a WhatsApp broadcast summary for existing leads.",
+}
+
+/** Demo Mode: append the user message locally, wait a short realistic
+ * delay, then return one of the fixed responses above — simulation only,
+ * never a real AI call. */
+function getDemoAiResponse(capability: AiCapability): Promise<{ text: string; source: "simulated" }> {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve({ text: DEMO_RESPONSES[capability], source: "simulated" }), 500 + Math.random() * 500)
+  })
+}
+
 function initialsAvatar() {
   return (
     <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand/15 text-brand">
@@ -34,6 +60,7 @@ function initialsAvatar() {
 }
 
 export function AiChat() {
+  const { mode } = useDashboardViewMode()
   const [messages, setMessages] = React.useState<AiChatMessage[]>([
     {
       id: "welcome",
@@ -62,7 +89,7 @@ export function AiChat() {
     setInput("")
     setIsThinking(true)
 
-    const { text: reply, source } = await getAiResponse(activeCapability, text)
+    const { text: reply, source } = mode === "demo" ? await getDemoAiResponse(activeCapability) : await getAiResponse(activeCapability, text)
     setMessages((prev) => [...prev, { id: `a_${Date.now()}`, role: "assistant", content: reply, createdAt: new Date().toISOString(), source }])
     setIsThinking(false)
   }
@@ -95,7 +122,9 @@ export function AiChat() {
       <div className="flex h-[36rem] flex-col overflow-hidden rounded-xl bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-foreground/10">
         <div className="flex items-center gap-2 border-b border-border px-3.5 py-2.5 text-xs text-muted-foreground">
           <Info className="size-3.5 shrink-0" />
-          Powered by Gemini when available — falls back to a local demo response if the AI provider is unreachable.
+          {mode === "demo"
+            ? "Demo AI — responses are simulated examples and never call Gemini."
+            : "Powered by Gemini when available — falls back to a local demo response if the AI provider is unreachable."}
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
@@ -115,7 +144,7 @@ export function AiChat() {
                   {message.role === "assistant" && message.source && (
                     <span className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground/70">
                       <Cpu className="size-2.5" />
-                      {message.source === "gemini" ? "Gemini" : "Simulated (demo fallback)"}
+                      {mode === "demo" ? "Demo AI" : message.source === "gemini" ? "Gemini" : "Simulated (fallback)"}
                     </span>
                   )}
                 </div>
