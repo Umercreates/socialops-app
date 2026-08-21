@@ -42,9 +42,9 @@ function welcomeMessage(): AiChatMessage {
  * real provider calls"; see /api/ai/chat's own doc comment). Sends the
  * conversation so far (server bounds it further) so a follow-up like
  * "make it shorter" actually has context, not just the latest message.
- * Never throws - a network failure resolves to the same honest
- * "unavailable" result the server itself returns for a Gemini failure. */
-async function requestAiReply(history: { role: "user" | "assistant"; content: string }[]): Promise<{ ok: true; text: string } | { ok: false }> {
+ * Never throws - a network failure falls back to the same generic
+ * "unavailable" text the server itself uses for an unclassified failure. */
+async function requestAiReply(history: { role: "user" | "assistant"; content: string }[]): Promise<{ ok: true; text: string } | { ok: false; message: string }> {
   try {
     const res = await fetch("/api/ai/chat", {
       method: "POST",
@@ -56,9 +56,12 @@ async function requestAiReply(history: { role: "user" | "assistant"; content: st
     if (res.ok && body?.ok && typeof body.text === "string") {
       return { ok: true, text: body.text }
     }
-    return { ok: false }
+    // The server already picked an honest, specific-where-useful message
+    // (e.g. "receiving too many requests" vs. "not configured yet") - show
+    // that instead of collapsing every failure into one identical string.
+    return { ok: false, message: typeof body?.error === "string" ? body.error : UNAVAILABLE_TEXT }
   } catch {
-    return { ok: false }
+    return { ok: false, message: UNAVAILABLE_TEXT }
   }
 }
 
@@ -97,7 +100,7 @@ export function AiChat() {
       ...prev,
       result.ok
         ? { id: nextMsgId("a"), role: "assistant", content: result.text, createdAt: new Date().toISOString(), source: "gemini" }
-        : { id: nextMsgId("a"), role: "assistant", content: UNAVAILABLE_TEXT, createdAt: new Date().toISOString(), source: "error" },
+        : { id: nextMsgId("a"), role: "assistant", content: result.message, createdAt: new Date().toISOString(), source: "error" },
     ])
     setIsThinking(false)
   }

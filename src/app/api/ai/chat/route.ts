@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/auth/guard"
 import { verifySameOrigin } from "@/lib/auth/csrf"
 import { getDashboardViewMode } from "@/lib/dashboard-view-mode"
 import { resolveActiveApiKey, resolveCredentialValue } from "@/lib/integrations/credential-resolution"
-import { generateChatWithGemini, type GeminiChatTurn } from "@/lib/services/gemini-client"
+import { generateChatWithGemini, type GeminiChatTurn, type GeminiFailureCode } from "@/lib/services/gemini-client"
 import { EASYLIFE_SYSTEM_PROMPT } from "@/lib/ai/easylife-system-prompt"
 import { apiError } from "@/lib/api/errors"
 
@@ -34,7 +34,19 @@ const messageSchema = z.object({
 })
 const bodySchema = z.object({ messages: z.array(messageSchema).min(1).max(200) })
 
-const UNAVAILABLE_MESSAGE = "EasyLife AI is temporarily unavailable. Please try again shortly."
+const GENERIC_UNAVAILABLE_MESSAGE = "EasyLife AI is temporarily unavailable. Please try again shortly."
+
+/** User-facing text per failure code - deliberately generic and never
+ * containing Google's raw error payload. Codes not listed here (e.g.
+ * invalid_key, billing_required, model_error, network_error) share the
+ * generic message: distinguishing them further wouldn't be actionable
+ * for an end user, only for whoever reads the sanitized server log line
+ * gemini-client.ts already writes for each one. */
+const USER_MESSAGE: Partial<Record<GeminiFailureCode, string>> = {
+  not_configured: "EasyLife AI has not been configured yet.",
+  quota_exhausted: "EasyLife AI credits are currently unavailable. Please try again after the AI service quota is restored.",
+  rate_limited: "EasyLife AI is receiving too many requests. Please try again shortly.",
+}
 
 export async function POST(request: Request) {
   const originCheck = verifySameOrigin(request)
@@ -75,8 +87,10 @@ export async function POST(request: Request) {
     }
 
     // Honest, friendly failure - never a silently-swapped fake response,
-    // and never the raw provider error/reason exposed to the client.
-    return NextResponse.json({ ok: false, error: UNAVAILABLE_MESSAGE })
+    // and never the raw provider error/reason exposed to the client. The
+    // code lets the UI (or a future UI) distinguish "try again shortly"
+    // from "an admin needs to fix something" without ever seeing why.
+    return NextResponse.json({ ok: false, code: result.code, error: USER_MESSAGE[result.code] ?? GENERIC_UNAVAILABLE_MESSAGE })
   } catch (error) {
     return apiError(error, "Failed to reach the AI Assistant")
   }
